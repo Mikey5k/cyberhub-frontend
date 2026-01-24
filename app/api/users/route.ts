@@ -4,7 +4,8 @@ import { db } from "@/lib/firebaseAdmin";
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const phone = searchParams.get("phone");
+    const phoneEncoded = searchParams.get("phone") || "";
+    const phone = decodeURIComponent(phoneEncoded);
     
     if (!phone) {
       return Response.json(
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log("GET User lookup - Phone:", phone);
+    console.log("GET User lookup - Phone (decoded):", phone, "Encoded:", phoneEncoded);
 
     // Check if Firebase is available
     if (!db) {
@@ -59,6 +60,7 @@ export async function GET(request: NextRequest) {
         error: "User not found",
         debug: {
           phone,
+          phoneEncoded,
           collectionsChecked: debugResults,
           totalCollections: collections.length,
           message: `Checked ${collections.length} collections, none contained user`
