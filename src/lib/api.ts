@@ -1,4 +1,4 @@
-const API_BASE = 'https://cyberhub-veritas.vercel.app/api';
+const API_BASE = '/api';
 
 export interface UserRole {
   role: 'user' | 'worker' | 'admin' | 'manager' | 'guest';

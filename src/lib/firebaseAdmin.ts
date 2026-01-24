@@ -1,48 +1,29 @@
 import admin from "firebase-admin";
 
-let db: any = null;
-let auth: any = null;
-
-try {
-  // Check if we have the required environment variables
-  const hasValidConfig = 
-    process.env.FIREBASE_PROJECT_ID && 
-    process.env.FIREBASE_CLIENT_EMAIL && 
-    process.env.FIREBASE_PRIVATE_KEY;
-  
-  if (hasValidConfig && !admin.apps.length) {
-    // Clean the private key
-    const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY || '';
-    const cleanPrivateKey = rawPrivateKey
-      .replace(/^"(.*)"$/, '$1')  // Remove quotes
-      .replace(/\\n/g, '\n');     // Convert \n to actual newlines
+// Initialize Firebase Admin
+if (!admin.apps.length) {
+  try {
+    // Check if we have the service account JSON as base64 string
+    const serviceAccountBase64 = process.env.FIREBASE_PRIVATE_KEY;
     
-    // Validate the cleaned key
-    const isValidKey = cleanPrivateKey.includes('-----BEGIN PRIVATE KEY-----') &&
-                      cleanPrivateKey.includes('-----END PRIVATE KEY-----') &&
-                      cleanPrivateKey.length > 200;
-    
-    if (isValidKey) {
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: cleanPrivateKey,
-        }),
-      });
-      
-      db = admin.firestore();
-      auth = admin.auth();
-      console.log("✅ Firebase Admin initialized successfully");
-    } else {
-      console.log("⚠️ Firebase Admin: Invalid private key format, running in mock mode");
+    if (!serviceAccountBase64) {
+      throw new Error("FIREBASE_PRIVATE_KEY environment variable is not set");
     }
-  } else {
-    console.log("⚠️ Firebase Admin: Missing environment variables, running in mock mode");
+    
+    // Decode base64 to JSON string, then parse
+    const serviceAccountJson = Buffer.from(serviceAccountBase64, 'base64').toString('utf-8');
+    const serviceAccount = JSON.parse(serviceAccountJson);
+    
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+    
+    console.log("✅ Firebase Admin initialized successfully from Base64");
+  } catch (error: any) {
+    console.error("❌ Firebase Admin initialization error:", error.message);
+    // Don't throw - allow app to continue in limited mode
   }
-} catch (error: any) {
-  console.log("⚠️ Firebase Admin: Initialization error, running in mock mode:", error.message);
 }
 
-export { db, auth };
-export const adminInstance = admin;
+export const db = admin.firestore();
+export const auth = admin.auth();
