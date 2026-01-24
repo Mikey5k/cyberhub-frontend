@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import admin from '@/lib/firebaseAdmin';
+import { db } from '@/lib/firebaseAdmin';
 
-const db = admin.firestore();
 
 export async function GET(request: NextRequest) {
   try {
