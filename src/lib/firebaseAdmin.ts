@@ -3,29 +3,35 @@ import admin from "firebase-admin";
 // Initialize Firebase Admin
 if (!admin.apps.length) {
   try {
-    // Check if we have the service account JSON as base64 string
-    const serviceAccountBase64 = process.env.FIREBASE_PRIVATE_KEY;
+    // Get environment variables
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+    if (!projectId || !clientEmail || !privateKey) {
+      throw new Error("Missing Firebase environment variables");
+    }
+
+    // Clean up the private key - remove quotes and fix newlines
+    let cleanedPrivateKey = privateKey;
     
-    if (!serviceAccountBase64) {
-      throw new Error("FIREBASE_PRIVATE_KEY environment variable is not set");
+    // Remove surrounding quotes if present
+    if (cleanedPrivateKey.startsWith('"') && cleanedPrivateKey.endsWith('"')) {
+      cleanedPrivateKey = cleanedPrivateKey.slice(1, -1);
     }
     
-    // Decode base64 to JSON string, then parse
-    const serviceAccountJson = Buffer.from(serviceAccountBase64, 'base64').toString('utf-8');
-    const serviceAccount = JSON.parse(serviceAccountJson);
-    
-    // Extract individual fields for Firebase
-    const firebaseConfig = {
-      projectId: serviceAccount.project_id,
-      clientEmail: serviceAccount.client_email,
-      privateKey: serviceAccount.private_key.replace(/\\n/g, '\n')
-    };
+    // Replace escaped newlines with actual newlines
+    cleanedPrivateKey = cleanedPrivateKey.replace(/\\n/g, '\n');
     
     admin.initializeApp({
-      credential: admin.credential.cert(firebaseConfig),
+      credential: admin.credential.cert({
+        projectId,
+        clientEmail,
+        privateKey: cleanedPrivateKey
+      }),
     });
     
-    console.log("✅ Firebase Admin initialized successfully");
+    console.log("✅ Firebase Admin initialized successfully from env vars");
   } catch (error: any) {
     console.error("❌ Firebase Admin initialization error:", error.message);
     console.error("Error details:", error);
