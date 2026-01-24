@@ -30,28 +30,40 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Try multiple collection names
+    // Try multiple collection names with detailed logging
     const collections = ["users", "clients", "workers", "admins", "managers"];
     let userData = null;
     let foundCollection = "";
+    const debugResults = [];
     
     for (const collection of collections) {
-      const doc = await db.collection(collection).doc(phone).get();
-      console.log(`Checking ${collection}:`, { exists: doc.exists });
-      
-      if (doc.exists) {
-        userData = doc.data();
-        foundCollection = collection;
-        break;
+      try {
+        const doc = await db.collection(collection).doc(phone).get();
+        const exists = doc.exists;
+        debugResults.push({ collection, exists, id: doc.id });
+        
+        if (doc.exists) {
+          userData = doc.data();
+          foundCollection = collection;
+          break;
+        }
+      } catch (error: any) {
+        debugResults.push({ collection, error: error.message, exists: false });
       }
     }
 
+    console.log("User lookup debug:", { phone, debugResults });
+
     if (!userData) {
-      console.log("User not found in any collection");
-      return Response.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
+      return Response.json({
+        error: "User not found",
+        debug: {
+          phone,
+          collectionsChecked: debugResults,
+          totalCollections: collections.length,
+          message: `Checked ${collections.length} collections, none contained user`
+        }
+      }, { status: 404 });
     }
 
     console.log("User found in collection:", foundCollection);
@@ -61,7 +73,8 @@ export async function GET(request: NextRequest) {
         phone,
         ...userData
       },
-      foundIn: foundCollection
+      foundIn: foundCollection,
+      debug: debugResults
     });
   } catch (error: any) {
     console.error("Users API GET error:", error);
