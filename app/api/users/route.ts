@@ -14,7 +14,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log("GET User lookup - Phone (decoded):", phone, "Encoded:", phoneEncoded);
+    // Handle + sign converted to space in URL
+    let searchPhone = phone;
+    if (phone.startsWith(" ") && phone.length > 1) {
+      searchPhone = "+" + phone.substring(1);
+    }
+
+    console.log("GET User lookup - Phone:", { 
+      original: phone, 
+      searchPhone, 
+      encoded: phoneEncoded 
+    });
 
     // Check if Firebase is available
     if (!db) {
@@ -22,7 +32,7 @@ export async function GET(request: NextRequest) {
       return Response.json({
         success: true,
         user: {
-          phone,
+          phone: searchPhone,
           role: "user",
           name: "",
           status: "active"
@@ -39,7 +49,7 @@ export async function GET(request: NextRequest) {
     
     for (const collection of collections) {
       try {
-        const doc = await db.collection(collection).doc(phone).get();
+        const doc = await db.collection(collection).doc(searchPhone).get();
         const exists = doc.exists;
         debugResults.push({ collection, exists, id: doc.id });
         
@@ -53,13 +63,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    console.log("User lookup debug:", { phone, debugResults });
+    console.log("User lookup debug:", { searchPhone, debugResults });
 
     if (!userData) {
       return Response.json({
         error: "User not found",
         debug: {
-          phone,
+          originalPhone: phone,
+          searchPhone,
           phoneEncoded,
           collectionsChecked: debugResults,
           totalCollections: collections.length,
@@ -72,7 +83,7 @@ export async function GET(request: NextRequest) {
     return Response.json({
       success: true,
       user: {
-        phone,
+        phone: searchPhone,
         ...userData
       },
       foundIn: foundCollection,
