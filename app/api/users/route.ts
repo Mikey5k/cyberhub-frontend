@@ -13,13 +13,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    console.log("GET User lookup - Phone:", phone);
+
     // Check if Firebase is available
     if (!db) {
+      console.log("GET - Firebase not initialized");
       return Response.json({
         success: true,
         user: {
           phone,
-          role: "user", // Default role
+          role: "user",
           name: "",
           status: "active"
         },
@@ -27,51 +30,57 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Get user from Firestore
-    const userDoc = await db.collection("users").doc(phone).get();
+    // Try multiple collection names
+    const collections = ["users", "clients", "workers", "admins", "managers"];
+    let userData = null;
+    let foundCollection = "";
     
-    if (!userDoc.exists) {
+    for (const collection of collections) {
+      const doc = await db.collection(collection).doc(phone).get();
+      console.log(`Checking ${collection}:`, { exists: doc.exists });
+      
+      if (doc.exists) {
+        userData = doc.data();
+        foundCollection = collection;
+        break;
+      }
+    }
+
+    if (!userData) {
+      console.log("User not found in any collection");
       return Response.json(
         { error: "User not found" },
         { status: 404 }
       );
     }
 
-    const userData = userDoc.data();
+    console.log("User found in collection:", foundCollection);
     return Response.json({
       success: true,
       user: {
-        phone: userDoc.id,
+        phone,
         ...userData
-      }
+      },
+      foundIn: foundCollection
     });
   } catch (error: any) {
-    console.error("Users API error:", error);
+    console.error("Users API GET error:", error);
     return Response.json(
       { 
-        success: true,
-        user: {
-          phone: request.nextUrl.searchParams.get("phone") || "unknown",
-          role: "user",
-          name: "",
-          status: "active"
-        },
-        message: "Using fallback data due to error"
-      }
+        error: "Server error",
+        message: error.message
+      },
+      { status: 500 }
     );
   }
 }
 
 export async function POST(request: NextRequest) {
-  let phone = "";
-  let role = "";
-  let name = "";
-
   try {
     const body = await request.json();
-    phone = body.phone;
-    role = body.role;
-    name = body.name || "";
+    const phone = body.phone;
+    const role = body.role;
+    const name = body.name || "";
 
     if (!phone || !role) {
       return Response.json(
@@ -80,8 +89,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log("POST User creation - Phone:", phone, "Role:", role);
+
     // Check if Firebase is available
     if (!db) {
+      console.log("POST - Firebase not initialized");
       return Response.json({
         success: true,
         message: "Firebase not initialized - user creation simulated",
@@ -89,8 +101,22 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Create or update user in Firestore
-    await db.collection("users").doc(phone).set({
+    // Determine collection based on role
+    let collectionName = "users";
+    if (["client", "user"].includes(role.toLowerCase())) {
+      collectionName = "clients";
+    } else if (["worker", "agent"].includes(role.toLowerCase())) {
+      collectionName = "workers";
+    } else if (role.toLowerCase() === "admin") {
+      collectionName = "admins";
+    } else if (role.toLowerCase() === "manager") {
+      collectionName = "managers";
+    }
+
+    console.log("Saving to collection:", collectionName);
+
+    // Create or update user
+    await db.collection(collectionName).doc(phone).set({
       phone,
       role,
       name,
@@ -99,21 +125,29 @@ export async function POST(request: NextRequest) {
       status: "active"
     }, { merge: true });
 
+    // Also save to generic users collection for easy lookup
+    await db.collection("users").doc(phone).set({
+      phone,
+      role,
+      name,
+      primaryCollection: collectionName,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      status: "active"
+    }, { merge: true });
+
     return Response.json({
       success: true,
       message: "User created/updated successfully",
-      user: { phone, role, name }
+      user: { phone, role, name },
+      savedTo: [collectionName, "users"]
     });
   } catch (error: any) {
     console.error("Create user error:", error);
     return Response.json({
-      success: true,
-      message: "User creation simulated due to error",
-      user: { 
-        phone: phone || "unknown", 
-        role: role || "user", 
-        name: name || "" 
-      }
-    });
+      success: false,
+      error: "Failed to create user",
+      message: error.message
+    }, { status: 500 });
   }
 }
