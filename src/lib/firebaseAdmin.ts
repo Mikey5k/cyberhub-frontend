@@ -1,41 +1,27 @@
 import admin from "firebase-admin";
 
-// Initialize Firebase Admin
+// Initialize Firebase Admin SDK
 if (!admin.apps.length) {
   try {
-    // Get environment variables
-    const projectId = process.env.FIREBASE_PROJECT_ID;
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY;
-
-    if (!projectId || !clientEmail || !privateKey) {
-      throw new Error("Missing Firebase environment variables");
-    }
-
-    // Clean up the private key - remove quotes and fix newlines
-    let cleanedPrivateKey = privateKey;
+    // Get Base64 encoded service account JSON
+    const serviceAccountBase64 = process.env.FIREBASE_PRIVATE_KEY;
     
-    // Remove surrounding quotes if present
-    if (cleanedPrivateKey.startsWith('"') && cleanedPrivateKey.endsWith('"')) {
-      cleanedPrivateKey = cleanedPrivateKey.slice(1, -1);
+    if (!serviceAccountBase64) {
+      throw new Error("FIREBASE_PRIVATE_KEY environment variable is not set");
     }
     
-    // Replace escaped newlines with actual newlines
-    cleanedPrivateKey = cleanedPrivateKey.replace(/\\n/g, '\n');
+    // Decode Base64 to JSON string
+    const serviceAccountJson = Buffer.from(serviceAccountBase64, 'base64').toString('utf-8');
+    const serviceAccount = JSON.parse(serviceAccountJson);
     
     admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId,
-        clientEmail,
-        privateKey: cleanedPrivateKey
-      }),
+      credential: admin.credential.cert(serviceAccount)
     });
     
-    console.log("✅ Firebase Admin initialized successfully from env vars");
+    console.log("✅ Firebase Admin initialized from Base64 JSON");
+    
   } catch (error: any) {
     console.error("❌ Firebase Admin initialization error:", error.message);
-    console.error("Error details:", error);
-    // Don't throw - allow app to continue in limited mode
   }
 }
 
