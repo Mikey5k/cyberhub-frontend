@@ -1,32 +1,24 @@
 import admin from "firebase-admin";
 
-// Initialize Firebase Admin SDK - 3 VAR METHOD
+// Initialize Firebase Admin SDK - RAW JSON METHOD
 if (!admin.apps.length) {
   try {
-    const projectId = process.env.FIREBASE_PROJECT_ID;
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY;
-
-    if (!projectId || !clientEmail || !privateKey) {
-      throw new Error("Missing Firebase environment variables");
+    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    
+    if (!serviceAccountJson) {
+      throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set");
     }
-
-    // CRITICAL: Replace escaped newlines with actual newlines
-    const formattedPrivateKey = privateKey.replace(/\\n/g, '\n');
+    
+    const serviceAccount = JSON.parse(serviceAccountJson);
     
     admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId,
-        clientEmail,
-        privateKey: formattedPrivateKey
-      })
+      credential: admin.credential.cert(serviceAccount)
     });
     
-    console.log("✅ Firebase Admin initialized (3-var method)");
+    console.log("✅ Firebase Admin initialized from raw JSON");
     
   } catch (error: any) {
     console.error("❌ Firebase Admin initialization failed:", error.message);
-    console.error("Error details:", error);
   }
 }
 
