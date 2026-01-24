@@ -1,7 +1,9 @@
+// Force Node runtime for Admin SDK
 export const runtime = "nodejs";
+
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebaseAdmin';
-
+import { FieldValue } from 'firebase-admin/firestore';
 
 export async function GET(request: NextRequest) {
   try {
@@ -102,8 +104,8 @@ export async function POST(request: NextRequest) {
         popular: Boolean(popular),
         status: 'active',
         createdBy: phone,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
       };
 
       await serviceRef.set(serviceData);
@@ -167,7 +169,7 @@ export async function PUT(request: NextRequest) {
       }
 
       const updateData: any = {
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
         ...updateFields
       };
 
@@ -177,7 +179,7 @@ export async function PUT(request: NextRequest) {
 
       if (archive) {
         updateData.archived = true;
-        updateData.archivedAt = admin.firestore.FieldValue.serverTimestamp();
+        updateData.archivedAt = FieldValue.serverTimestamp();
         updateData.archivedBy = phone;
       }
 
