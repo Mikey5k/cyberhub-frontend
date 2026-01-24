@@ -133,6 +133,9 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
     const { action, phone, ...data } = body;
+    
+    // Logging for debugging
+    console.log('PUT request received:', { action, phone, serviceId: data.serviceId });
 
     if (!action) {
       return NextResponse.json({ error: 'Action is required' }, { status: 400 });
