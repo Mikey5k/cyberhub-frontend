@@ -4,6 +4,11 @@ import { FieldValue } from "firebase-admin/firestore";
 
 export const runtime = "nodejs";
 
+type Task = {
+  id: string;
+  [key: string]: any; // Allow other Firestore fields
+};
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -17,7 +22,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    let tasks = [];
+    let tasks: Task[] = [];
 
     if (role === "user") {
       // User sees their own tasks
@@ -32,7 +37,7 @@ export async function GET(request: NextRequest) {
       }));
 
       // Sort manually
-      tasks.sort((a: any, b: any) => {
+      tasks.sort((a, b) => {
         const timeA = a.createdAt?.seconds || a.createdAt?._seconds || 0;
         const timeB = b.createdAt?.seconds || b.createdAt?._seconds || 0;
         return timeB - timeA;
@@ -66,7 +71,7 @@ export async function GET(request: NextRequest) {
       tasks = [...assignedTasks, ...unassignedTasks];
 
       // Sort manually
-      tasks.sort((a: any, b: any) => {
+      tasks.sort((a, b) => {
         const timeA = a.createdAt?.seconds || a.createdAt?._seconds || 0;
         const timeB = b.createdAt?.seconds || b.createdAt?._seconds || 0;
         return timeB - timeA;
