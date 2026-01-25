@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
         }, { status: 400 });
       }
 
-      // Use type assertion instead of explicit type
+      // Use 'any' type to avoid TypeScript query assignment issues
       let query: any = db.collection('payments');
 
       // Filter by user
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
           .get();
         
         const agentPhones: string[] = [];
-        agentsSnapshot.forEach(doc => {
+        agentsSnapshot.forEach((doc: any) => {
           agentPhones.push(doc.id);
         });
 
@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
       const snapshot = await query.orderBy('createdAt', 'desc').get();
       const payments: any[] = [];
       
-      snapshot.forEach(doc => {
+      snapshot.forEach((doc: any) => {
         const data = doc.data();
         payments.push({
           id: doc.id,
@@ -135,8 +135,8 @@ export async function GET(request: NextRequest) {
         }, { status: 400 });
       }
 
-      let query: any = db.collection('withdrawals')
-        .where('userPhone', '==', userPhone);
+      // Use 'any' type to avoid TypeScript query assignment issues
+      let query: any = db.collection('withdrawals').where('userPhone', '==', userPhone);
 
       // Filter by status if provided
       if (status) {
@@ -146,7 +146,7 @@ export async function GET(request: NextRequest) {
       const snapshot = await query.orderBy('requestedAt', 'desc').get();
       const withdrawals: any[] = [];
       
-      snapshot.forEach(doc => {
+      snapshot.forEach((doc: any) => {
         const data = doc.data();
         withdrawals.push({
           id: doc.id,
@@ -185,7 +185,7 @@ export async function GET(request: NextRequest) {
           .where('status', '==', 'completed')
           .get();
         
-        tasksSnapshot.forEach(doc => {
+        tasksSnapshot.forEach((doc: any) => {
           const task = doc.data() as Task;
           totalEarnings += (task.price || 0) * 0.30; // 30% commission
         });
@@ -195,7 +195,7 @@ export async function GET(request: NextRequest) {
           .where('userPhone', '==', userPhone)
           .get();
         
-        withdrawalsSnapshot.forEach(doc => {
+        withdrawalsSnapshot.forEach((doc: any) => {
           const withdrawal = doc.data() as Withdrawal;
           if (withdrawal.status === 'completed') {
             totalWithdrawn += withdrawal.amount || 0;
@@ -213,7 +213,7 @@ export async function GET(request: NextRequest) {
           .get();
         
         const agentPhones: string[] = [];
-        agentsSnapshot.forEach(doc => {
+        agentsSnapshot.forEach((doc: any) => {
           agentPhones.push(doc.id);
         });
 
@@ -224,7 +224,7 @@ export async function GET(request: NextRequest) {
             .get();
           
           let totalAgentEarnings = 0;
-          tasksSnapshot.forEach(doc => {
+          tasksSnapshot.forEach((doc: any) => {
             const task = doc.data() as Task;
             totalAgentEarnings += (task.price || 0) * 0.30; // 30% agent commission
           });
@@ -236,7 +236,7 @@ export async function GET(request: NextRequest) {
             .where('userPhone', '==', userPhone)
             .get();
           
-          withdrawalsSnapshot.forEach(doc => {
+          withdrawalsSnapshot.forEach((doc: any) => {
             const withdrawal = doc.data() as Withdrawal;
             if (withdrawal.status === 'completed') {
               totalWithdrawn += withdrawal.amount || 0;
@@ -355,7 +355,7 @@ export async function POST(request: NextRequest) {
           .get();
         
         let totalEarnings = 0;
-        tasksSnapshot.forEach(doc => {
+        tasksSnapshot.forEach((doc: any) => {
           const task = doc.data() as Task;
           totalEarnings += (task.price || 0) * 0.30;
         });
@@ -366,7 +366,7 @@ export async function POST(request: NextRequest) {
           .get();
         
         let totalWithdrawn = 0;
-        withdrawalsSnapshot.forEach(doc => {
+        withdrawalsSnapshot.forEach((doc: any) => {
           const withdrawal = doc.data() as Withdrawal;
           totalWithdrawn += withdrawal.amount || 0;
         });
