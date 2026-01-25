@@ -29,17 +29,24 @@ function AgentSignupContent() {
       fetch(`/api/users?phone=${encodeURIComponent(managerPhone)}`)
         .then(res => res.json())
         .then(data => {
-          if (data.success && (data.user?.role === 'admin' || data.user?.role === 'manager')) {
+          console.log('Manager API response:', data);
+          
+          // Check if manager is admin or manager based on foundIn field
+          if (data.success && (data.foundIn === 'admins' || data.foundIn === 'managers')) {
+            const role = data.foundIn === 'admins' ? 'admin' : 'manager';
             setManagerInfo({ 
               phone: managerPhone, 
-              name: data.user?.name || (data.user?.role === 'admin' ? 'Admin' : 'Manager'), 
-              role: data.user?.role 
+              name: data.user?.name || (role === 'admin' ? 'Admin' : 'Manager'), 
+              role: role
             });
           } else {
             setError('Invalid manager link. Manager must be admin or manager role.');
           }
         })
-        .catch(() => setError('Invalid manager link'));
+        .catch((err) => {
+          console.error('Manager fetch error:', err);
+          setError('Invalid manager link');
+        });
     } else {
       setError('Missing manager referral. Please use a valid invitation link.');
     }
