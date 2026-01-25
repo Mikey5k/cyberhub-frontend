@@ -25,12 +25,16 @@ function AgentSignupContent() {
 
   useEffect(() => {
     if (managerPhone) {
-      // Fetch manager info
-      fetch(`https://cyberhub-veritas.vercel.app/api/getRole?phone=${encodeURIComponent(managerPhone)}`)
+      // Fetch manager info using our internal API
+      fetch(`/api/users?phone=${encodeURIComponent(managerPhone)}`)
         .then(res => res.json())
         .then(data => {
-          if (data.role === 'admin' || data.role === 'manager') {
-            setManagerInfo({ phone: managerPhone, name: data.role === 'admin' ? 'Admin' : 'Manager', role: data.role });
+          if (data.success && (data.user?.role === 'admin' || data.user?.role === 'manager')) {
+            setManagerInfo({ 
+              phone: managerPhone, 
+              name: data.user?.name || (data.user?.role === 'admin' ? 'Admin' : 'Manager'), 
+              role: data.user?.role 
+            });
           } else {
             setError('Invalid manager link. Manager must be admin or manager role.');
           }
@@ -52,25 +56,12 @@ function AgentSignupContent() {
     setError('');
 
     try {
-      // Create agent user with manager link
+      // Create agent user with manager link using our API utility
       const result = await createUser(phone, 'worker', name, managerPhone || undefined);
       
       if (result.success) {
-        // Store manager-agent relationship in database
-        if (managerPhone) {
-          try {
-            await fetch('https://cyberhub-veritas.vercel.app/api/linkAgentToManager', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                agentPhone: phone, 
-                managerPhone: managerPhone 
-              })
-            });
-          } catch (err) {
-            console.warn('Could not link agent to manager, will handle later');
-          }
-        }
+        // Manager-agent relationship is already handled in createUser function
+        // through the managerPhone parameter in the API
         
         setSuccess(true);
         
