@@ -309,9 +309,9 @@ export async function POST(request: NextRequest) {
         taskId,
         amount: Number(amount),
         customerPhone: userPhone,
-        workerPhone: taskDoc.data().assignedWorkerPhone || null,
+        workerPhone: taskDoc.data()?.assignedWorkerPhone || null,
         method,
-        description: description || `Payment for task: ${taskDoc.data().title}`,
+        description: description || `Payment for task: ${taskDoc.data()?.title || 'Unknown'}`,
         status: 'completed', // Simulated payment is always successful
         createdAt: FieldValue.serverTimestamp(),
         completedAt: FieldValue.serverTimestamp()
