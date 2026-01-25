@@ -53,7 +53,8 @@ export async function GET(request: NextRequest) {
         }, { status: 400 });
       }
 
-      let query: FirebaseFirestore.Query = db.collection('payments');
+      // Use type assertion instead of explicit type
+      let query: any = db.collection('payments');
 
       // Filter by user
       if (userRole === 'user') {
@@ -134,7 +135,7 @@ export async function GET(request: NextRequest) {
         }, { status: 400 });
       }
 
-      let query: FirebaseFirestore.Query = db.collection('withdrawals')
+      let query: any = db.collection('withdrawals')
         .where('userPhone', '==', userPhone);
 
       // Filter by status if provided
