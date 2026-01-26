@@ -1,13 +1,57 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from '@/lib/firebaseAdmin';
-import { FieldValue } from "firebase-admin/firestore";
 
-export const runtime = "nodejs";
+export const runtime = "edge";
 
 type Task = {
   id: string;
-  [key: string]: any; // Allow other Firestore fields
+  [key: string]: any;
 };
+
+// Firestore REST API helper
+const FIRESTORE_URL = `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents`;
+
+async function firestoreRequest(endpoint: string, method: string = 'GET', body?: any) {
+  const url = `${FIRESTORE_URL}${endpoint}`;
+  const apiKey = process.env.FIREBASE_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error("Firebase API key not configured");
+  }
+
+  const options: RequestInit = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  };
+
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
+
+  // Add API key as query parameter
+  const finalUrl = `${url}?key=${apiKey}`;
+  const response = await fetch(finalUrl, options);
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Firestore API error (${response.status}):`, errorText);
+    throw new Error(`Firestore request failed: ${response.status} ${errorText}`);
+  }
+  
+  return await response.json();
+}
+
+// Convert Firestore timestamp to seconds
+function convertTimestamp(timestamp: any): number {
+  if (!timestamp) return 0;
+  if (timestamp.seconds !== undefined) return Number(timestamp.seconds);
+  if (timestamp._seconds !== undefined) return Number(timestamp._seconds);
+  if (typeof timestamp === 'string' && timestamp.includes('T')) {
+    return Math.floor(new Date(timestamp).getTime() / 1000);
+  }
+  return 0;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,69 +69,120 @@ export async function GET(request: NextRequest) {
     let tasks: Task[] = [];
 
     if (role === "user") {
-      // User sees their own tasks
-      const tasksSnapshot = await db
-        .collection("tasks")
-        .where("customerPhone", "==", phone)
-        .get();
+      // User sees their own tasks - need to list all tasks and filter
+      const response = await firestoreRequest('/tasks');
+      if (response && response.documents) {
+        tasks = response.documents
+          .filter((doc: any) => {
+            const fields = doc.fields || {};
+            return fields.customerPhone?.stringValue === phone;
+          })
+          .map((doc: any) => {
+            const fields = doc.fields || {};
+            const task: any = { id: doc.name.split('/').pop() };
+            
+            // Convert Firestore fields to regular object
+            Object.keys(fields).forEach(key => {
+              const field = fields[key];
+              if (field.stringValue !== undefined) task[key] = field.stringValue;
+              else if (field.integerValue !== undefined) task[key] = Number(field.integerValue);
+              else if (field.doubleValue !== undefined) task[key] = Number(field.doubleValue);
+              else if (field.booleanValue !== undefined) task[key] field.booleanValue;
+              else if (field.timestampValue !== undefined) task[key] = field.timestampValue;
+              else if (field.mapValue?.fields) {
+                // Handle nested objects
+                const nested: any = {};
+                Object.keys(field.mapValue.fields).forEach(nestedKey => {
+                  const nestedField = field.mapValue.fields[nestedKey];
+                  if (nestedField.stringValue !== undefined) nested[nestedKey] = nestedField.stringValue;
+                  else if (nestedField.integerValue !== undefined) nested[nestedKey] = Number(nestedField.integerValue);
+                  else if (nestedField.doubleValue !== undefined) nested[nestedKey] = Number(nestedField.doubleValue);
+                });
+                task[key] = nested;
+              }
+            });
+            
+            return task;
+          });
 
-      tasks = tasksSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-
-      // Sort manually
-      tasks.sort((a, b) => {
-        const timeA = a.createdAt?.seconds || a.createdAt?._seconds || 0;
-        const timeB = b.createdAt?.seconds || b.createdAt?._seconds || 0;
-        return timeB - timeA;
-      });
+        // Sort manually by createdAt
+        tasks.sort((a, b) => {
+          const timeA = convertTimestamp(a.createdAt);
+          const timeB = convertTimestamp(b.createdAt);
+          return timeB - timeA;
+        });
+      }
     }
     else if (role === "worker") {
       // Worker sees assigned + available tasks
-      const assignedTasksSnapshot = await db
-        .collection("tasks")
-        .where("assignedWorkerPhone", "==", phone)
-        .get();
+      const response = await firestoreRequest('/tasks');
+      if (response.documents) {
+        const allTasks = response.documents.map((doc: any) => {
+          const fields = doc.fields || {};
+          const task: any = { id: doc.name.split('/').pop() };
+          
+          Object.keys(fields).forEach(key => {
+            const field = fields[key];
+            if (field.stringValue !== undefined) task[key] = field.stringValue;
+            else if (field.integerValue !== undefined) task[key] = Number(field.integerValue);
+            else if (field.doubleValue !== undefined) task[key] = Number(field.doubleValue);
+            else if (field.booleanValue !== undefined) task[key] = field.booleanValue;
+            else if (field.timestampValue !== undefined) task[key] = field.timestampValue;
+          });
+          
+          return task;
+        });
 
-      const unassignedTasksSnapshot = await db
-        .collection("tasks")
-        .where("assignedWorkerPhone", "==", null)
-        .where("status", "==", "awaiting_worker")
-        .get();
+        // Filter assigned tasks
+        const assignedTasks = allTasks
+          .filter((task: any) => task.assignedWorkerPhone === phone)
+          .map((task: any) => ({ ...task, type: "assigned" }));
 
-      const assignedTasks = assignedTasksSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        type: "assigned"
-      }));
+        // Filter unassigned available tasks
+        const unassignedTasks = allTasks
+          .filter((task: any) => 
+            (!task.assignedWorkerPhone || task.assignedWorkerPhone === "null" || task.assignedWorkerPhone === null) &&
+            task.status === "awaiting_worker"
+          )
+          .map((task: any) => ({ ...task, type: "available" }));
 
-      const unassignedTasks = unassignedTasksSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        type: "available"
-      }));
+        tasks = [...assignedTasks, ...unassignedTasks];
 
-      tasks = [...assignedTasks, ...unassignedTasks];
-
-      // Sort manually
-      tasks.sort((a, b) => {
-        const timeA = a.createdAt?.seconds || a.createdAt?._seconds || 0;
-        const timeB = b.createdAt?.seconds || b.createdAt?._seconds || 0;
-        return timeB - timeA;
-      });
+        // Sort manually
+        tasks.sort((a, b) => {
+          const timeA = convertTimestamp(a.createdAt);
+          const timeB = convertTimestamp(b.createdAt);
+          return timeB - timeA;
+        });
+      }
     }
     else if (role === "admin") {
       // Admin sees all tasks
-      const tasksSnapshot = await db
-        .collection("tasks")
-        .orderBy("createdAt", "desc")
-        .get();
+      const response = await firestoreRequest('/tasks');
+      if (response.documents) {
+        tasks = response.documents.map((doc: any) => {
+          const fields = doc.fields || {};
+          const task: any = { id: doc.name.split('/').pop() };
+          
+          Object.keys(fields).forEach(key => {
+            const field = fields[key];
+            if (field.stringValue !== undefined) task[key] = field.stringValue;
+            else if (field.integerValue !== undefined) task[key] = Number(field.integerValue);
+            else if (field.doubleValue !== undefined) task[key] = Number(field.doubleValue);
+            else if (field.booleanValue !== undefined) task[key] = field.booleanValue;
+            else if (field.timestampValue !== undefined) task[key] = field.timestampValue;
+          });
+          
+          return task;
+        });
 
-      tasks = tasksSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+        // Sort manually by createdAt (descending)
+        tasks.sort((a, b) => {
+          const timeA = convertTimestamp(a.createdAt);
+          const timeB = convertTimestamp(b.createdAt);
+          return timeB - timeA;
+        });
+      }
     }
 
     return NextResponse.json({
@@ -100,7 +195,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         error: "Database error",
-        message: error.message
+        message: error.message || error.toString()
       },
       { status: 500 }
     );
@@ -130,23 +225,28 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const taskRef = db.collection("tasks").doc();
+      const taskId = Date.now().toString(); // Simple ID generation
+      const now = new Date().toISOString();
+      
+      const taskData = {
+        fields: {
+          customerPhone: { stringValue: phone },
+          title: { stringValue: title },
+          description: { stringValue: description || "" },
+          price: { doubleValue: price || 0 },
+          status: { stringValue: "awaiting_worker" },
+          progress: { integerValue: 0 },
+          assignedWorkerPhone: { stringValue: "" },
+          createdAt: { timestampValue: now },
+          updatedAt: { timestampValue: now }
+        }
+      };
 
-      await taskRef.set({
-        customerPhone: phone,
-        title: title,
-        description: description || "",
-        price: price || 0,
-        status: "awaiting_worker",
-        progress: 0,
-        assignedWorkerPhone: null,
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp()
-      });
+      await firestoreRequest(`/tasks/${taskId}`, 'PATCH', taskData);
 
       return NextResponse.json({
         success: true,
-        taskId: taskRef.id,
+        taskId: taskId,
         phone,
         title,
         price: price || 0,
@@ -165,22 +265,27 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const taskRef = db.collection("tasks").doc(taskId);
-      const taskDoc = await taskRef.get();
-
-      if (!taskDoc.exists) {
+      // Check if task exists
+      try {
+        await firestoreRequest(`/tasks/${taskId}`);
+      } catch (error) {
         return NextResponse.json(
           { error: "Task not found" },
           { status: 404 }
         );
       }
 
-      await taskRef.update({
-        assignedWorkerPhone: workerPhone,
-        status: "in-progress",
-        progress: 25,
-        updatedAt: FieldValue.serverTimestamp()
-      });
+      const now = new Date().toISOString();
+      const updateData = {
+        fields: {
+          assignedWorkerPhone: { stringValue: workerPhone },
+          status: { stringValue: "in-progress" },
+          progress: { integerValue: 25 },
+          updatedAt: { timestampValue: now }
+        }
+      };
+
+      await firestoreRequest(`/tasks/${taskId}`, 'PATCH', updateData);
 
       return NextResponse.json({
         success: true,
@@ -203,50 +308,53 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const taskRef = db.collection("tasks").doc(taskId);
-      const taskDoc = await taskRef.get();
-
-      if (!taskDoc.exists) {
+      // Check if task exists
+      try {
+        await firestoreRequest(`/tasks/${taskId}`);
+      } catch (error) {
         return NextResponse.json(
           { error: "Task not found" },
           { status: 404 }
         );
       }
 
+      const now = new Date().toISOString();
       const updateData: any = {
-        status,
-        updatedAt: FieldValue.serverTimestamp()
+        fields: {
+          status: { stringValue: status },
+          updatedAt: { timestampValue: now }
+        }
       };
 
       // Add progress if provided
       if (progress !== undefined) {
-        updateData.progress = progress;
+        updateData.fields.progress = { integerValue: progress };
       }
 
       if (notes) {
-        updateData.notes = notes;
+        updateData.fields.notes = { stringValue: notes };
       }
 
       if (status === "completed") {
-        updateData.completedAt = FieldValue.serverTimestamp();
-        updateData.progress = 100;
+        updateData.fields.completedAt = { timestampValue: now };
+        updateData.fields.progress = { integerValue: 100 };
       }
 
       if (status === "processing") {
         // Set auto-completion for 24 hours from now
         const autoCompleteTime = new Date();
         autoCompleteTime.setHours(autoCompleteTime.getHours() + 24);
-        updateData.autoCompleteAt = autoCompleteTime;
+        updateData.fields.autoCompleteAt = { timestampValue: autoCompleteTime.toISOString() };
       }
 
-      await taskRef.update(updateData);
+      await firestoreRequest(`/tasks/${taskId}`, 'PATCH', updateData);
 
       return NextResponse.json({
         success: true,
         message: `Task ${status} successfully`,
         taskId,
         status,
-        progress: updateData.progress
+        progress: progress || (status === "completed" ? 100 : undefined)
       });
     }
 
@@ -260,7 +368,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: "Database error",
-        message: error.message
+        message: error.message || error.toString()
       },
       { status: 500 }
     );
