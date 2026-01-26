@@ -1,3 +1,5 @@
+import Landing from '@/src/components/Landing';
+
 export default function HomePage() {
-  return <div>Next.js Root Page Stub</div>;
+  return <Landing />;
 }
