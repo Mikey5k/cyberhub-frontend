@@ -1,9 +1,6 @@
-// Force Node runtime for Admin SDK
-export const runtime = "nodejs";
-
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/firebaseAdmin';
-import { FieldValue } from 'firebase-admin/firestore';
+
+export const runtime = "edge";
 
 interface Task {
   id: string;
@@ -40,6 +37,40 @@ interface WithdrawalRequest {
   method?: string;
 }
 
+// Firestore REST API helper
+const FIRESTORE_URL = `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents`;
+
+async function firestoreRequest(endpoint: string, method: string = 'GET', body?: any) {
+  const url = `${FIRESTORE_URL}${endpoint}`;
+  const apiKey = process.env.FIREBASE_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error("Firebase API key not configured");
+  }
+
+  const options: RequestInit = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  };
+
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
+
+  const finalUrl = `${url}?key=${apiKey}`;
+  const response = await fetch(finalUrl, options);
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Firestore API error (${response.status}):`, errorText);
+    throw new Error(`Firestore request failed: ${response.status} ${errorText}`);
+  }
+  
+  return await response.json();
+}
+
 // Helper functions
 function calculateNextWithdrawal(): string {
   const today = new Date();
@@ -59,6 +90,56 @@ function getCurrentWithdrawalDay(): string {
   return days[new Date().getDay()];
 }
 
+// Helper to convert Firestore document
+function convertFirestoreDoc(doc: any): any {
+  const fields = doc.fields || {};
+  const result: any = { id: doc.name.split('/').pop() };
+  
+  Object.keys(fields).forEach(key => {
+    const field = fields[key];
+    if (field.stringValue !== undefined) result[key] = field.stringValue;
+    else if (field.integerValue !== undefined) result[key] = Number(field.integerValue);
+    else if (field.doubleValue !== undefined) result[key] = Number(field.doubleValue);
+    else if (field.booleanValue !== undefined) result[key] = field.booleanValue;
+    else if (field.timestampValue !== undefined) result[key] = field.timestampValue;
+    else if (field.nullValue !== undefined) result[key] = null;
+    else if (field.mapValue?.fields) {
+      const nested: any = {};
+      Object.keys(field.mapValue.fields).forEach(nestedKey => {
+        const nestedField = field.mapValue.fields[nestedKey];
+        if (nestedField.stringValue !== undefined) nested[nestedKey] = nestedField.stringValue;
+        else if (nestedField.integerValue !== undefined) nested[nestedKey] = Number(nestedField.integerValue);
+        else if (nestedField.doubleValue !== undefined) nested[nestedKey] = Number(nestedField.doubleValue);
+      });
+      result[key] = nested;
+    }
+  });
+  
+  return result;
+}
+
+async function getTasksByFilter(field: string, value: string, statusFilter?: string) {
+  const response = await firestoreRequest('/tasks');
+  if (!response.documents) return [];
+  
+  return response.documents
+    .map(convertFirestoreDoc)
+    .filter((task: any) => {
+      if (statusFilter && task.status !== statusFilter) return false;
+      if (field === 'assignedWorkerPhone' && task[field] !== value) return false;
+      return true;
+    });
+}
+
+async function getWorkersByManager(managerPhone: string) {
+  const response = await firestoreRequest('/workers');
+  if (!response.documents) return [];
+  
+  return response.documents
+    .map(convertFirestoreDoc)
+    .filter((worker: any) => worker.managerPhone === managerPhone);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -74,30 +155,24 @@ export async function GET(request: NextRequest) {
 
     if (userRole === 'worker') {
       // Calculate agent commissions (30% of completed tasks)
-      const tasksSnapshot = await db.collection('tasks')
-        .where('assignedWorkerPhone', '==', userPhone)
-        .where('status', '==', 'completed')
-        .get();
+      const completedTasks = await getTasksByFilter('assignedWorkerPhone', userPhone, 'completed');
 
-      const completedTasks: any[] = [];
       let totalEarnings = 0;
       let agentCommission = 0;
-
-      tasksSnapshot.forEach(doc => {
-        const task = doc.data() as Task;
+      const tasksWithCommission = completedTasks.map((task: any) => {
         const taskPrice = task.price || 0;
         const commission = taskPrice * 0.30; // 30% agent commission
         
-        completedTasks.push({
-          id: doc.id,
+        totalEarnings += taskPrice;
+        agentCommission += commission;
+
+        return {
+          id: task.id,
           title: task.title,
           price: taskPrice,
           commission: commission,
           completedAt: task.completedAt
-        });
-
-        totalEarnings += taskPrice;
-        agentCommission += commission;
+        };
       });
 
       return NextResponse.json({
@@ -106,37 +181,28 @@ export async function GET(request: NextRequest) {
         totalTasksValue: totalEarnings,
         agentCommission: agentCommission,
         commissionRate: 0.30,
-        completedTasks: completedTasks.length,
-        tasks: completedTasks,
+        completedTasks: tasksWithCommission.length,
+        tasks: tasksWithCommission,
         nextWithdrawal: calculateNextWithdrawal()
       });
     }
 
     else if (userRole === 'manager') {
       // Calculate manager commissions (10% of agent earnings)
-      // First get agents under this manager
-      const agentsSnapshot = await db.collection('workers')
-        .where('managerPhone', '==', userPhone)
-        .get();
-
-      const agentPhones: string[] = [];
-      agentsSnapshot.forEach(doc => {
-        agentPhones.push(doc.id);
-      });
+      const agents = await getWorkersByManager(userPhone);
+      const agentPhones = agents.map((agent: any) => agent.id);
 
       let managerCommission = 0;
       let teamEarnings = 0;
       const agentCommissions: AgentCommission[] = [];
 
       if (agentPhones.length > 0) {
-        // Get completed tasks for these agents
-        const tasksSnapshot = await db.collection('tasks')
-          .where('assignedWorkerPhone', 'in', agentPhones)
-          .where('status', '==', 'completed')
-          .get();
+        const allTasks = await getTasksByFilter('status', 'completed');
+        const agentTasks = allTasks.filter((task: any) => 
+          task.assignedWorkerPhone && agentPhones.includes(task.assignedWorkerPhone)
+        );
 
-        tasksSnapshot.forEach(doc => {
-          const task = doc.data() as Task;
+        agentTasks.forEach((task: any) => {
           const taskPrice = task.price || 0;
           const agentEarning = taskPrice * 0.30; // Agent gets 30%
           const managerEarning = agentEarning * 0.10; // Manager gets 10% of agent earnings
@@ -145,7 +211,7 @@ export async function GET(request: NextRequest) {
           managerCommission += managerEarning;
 
           agentCommissions.push({
-            taskId: doc.id,
+            taskId: task.id,
             taskTitle: task.title,
             agentPhone: task.assignedWorkerPhone,
             taskPrice: taskPrice,
@@ -169,17 +235,14 @@ export async function GET(request: NextRequest) {
 
     else if (userRole === 'admin') {
       // Admin sees all commissions
-      const tasksSnapshot = await db.collection('tasks')
-        .where('status', '==', 'completed')
-        .get();
+      const completedTasks = await getTasksByFilter('status', 'completed');
 
       let totalRevenue = 0;
       let totalAgentCommissions = 0;
       let totalManagerCommissions = 0;
       const allCommissions: CommissionRecord[] = [];
 
-      tasksSnapshot.forEach(doc => {
-        const task = doc.data() as Task;
+      completedTasks.forEach((task: any) => {
         const taskPrice = task.price || 0;
         const agentCommission = taskPrice * 0.30;
         const managerCommission = agentCommission * 0.10;
@@ -189,7 +252,7 @@ export async function GET(request: NextRequest) {
         totalManagerCommissions += managerCommission;
 
         allCommissions.push({
-          taskId: doc.id,
+          taskId: task.id,
           title: task.title,
           price: taskPrice,
           agentPhone: task.assignedWorkerPhone,
@@ -206,7 +269,7 @@ export async function GET(request: NextRequest) {
         totalAgentCommissions: totalAgentCommissions,
         totalManagerCommissions: totalManagerCommissions,
         platformProfit: totalRevenue - totalAgentCommissions - totalManagerCommissions,
-        completedTasks: tasksSnapshot.size,
+        completedTasks: completedTasks.length,
         allCommissions: allCommissions
       });
     }
@@ -218,10 +281,10 @@ export async function GET(request: NextRequest) {
     }
 
   } catch (error: any) {
-    console.error('Firestore error:', error);
+    console.error('Commissions API error:', error);
     return NextResponse.json({ 
       error: 'Database error',
-      message: error.message
+      message: error.message || error.toString()
     }, { status: 500 });
   }
 }
@@ -237,33 +300,38 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    const withdrawalRef = db.collection('withdrawals').doc();
+    const withdrawalId = Date.now().toString();
+    const now = new Date().toISOString();
+    
+    const withdrawalData = {
+      fields: {
+        userPhone: { stringValue: userPhone },
+        userRole: { stringValue: userRole },
+        amount: { doubleValue: parseFloat(amount.toString()) },
+        method: { stringValue: method },
+        status: { stringValue: 'pending' },
+        requestedAt: { timestampValue: now },
+        processedAt: { nullValue: null },
+        withdrawalDay: { stringValue: getCurrentWithdrawalDay() }
+      }
+    };
 
-    await withdrawalRef.set({
-      userPhone: userPhone,
-      userRole: userRole,
-      amount: parseFloat(amount.toString()),
-      method: method,
-      status: 'pending',
-      requestedAt: FieldValue.serverTimestamp(),
-      processedAt: null,
-      withdrawalDay: getCurrentWithdrawalDay()
-    });
+    await firestoreRequest(`/withdrawals/${withdrawalId}`, 'PATCH', withdrawalData);
 
     return NextResponse.json({
       success: true,
       message: 'Withdrawal request submitted',
-      withdrawalId: withdrawalRef.id,
+      withdrawalId: withdrawalId,
       amount: amount,
       status: 'pending',
       processingDays: 'Wednesdays & Sundays'
     });
 
   } catch (error: any) {
-    console.error('Firestore error:', error);
+    console.error('Commissions API POST error:', error);
     return NextResponse.json({ 
       error: 'Database error',
-      message: error.message
+      message: error.message || error.toString()
     }, { status: 500 });
   }
 }
