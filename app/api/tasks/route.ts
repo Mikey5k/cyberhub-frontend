@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
               if (field.stringValue !== undefined) task[key] = field.stringValue;
               else if (field.integerValue !== undefined) task[key] = Number(field.integerValue);
               else if (field.doubleValue !== undefined) task[key] = Number(field.doubleValue);
-              else if (field.booleanValue !== undefined) task[key] field.booleanValue;
+              else if (field.booleanValue !== undefined) task[key] = field.booleanValue;
               else if (field.timestampValue !== undefined) task[key] = field.timestampValue;
               else if (field.mapValue?.fields) {
                 // Handle nested objects
