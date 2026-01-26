@@ -1,9 +1,6 @@
-// Force Node runtime for Admin SDK
-export const runtime = "nodejs";
-
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/firebaseAdmin';
-import { FieldValue } from 'firebase-admin/firestore';
+
+export const runtime = "edge";
 
 interface Payment {
   id: string;
@@ -35,6 +32,127 @@ interface Task {
   status?: string;
 }
 
+// Firestore REST API helper
+const FIRESTORE_URL = `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents`;
+
+async function firestoreRequest(endpoint: string, method: string = 'GET', body?: any) {
+  const url = `${FIRESTORE_URL}${endpoint}`;
+  const apiKey = process.env.FIREBASE_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error("Firebase API key not configured");
+  }
+
+  const options: RequestInit = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  };
+
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
+
+  const finalUrl = `${url}?key=${apiKey}`;
+  const response = await fetch(finalUrl, options);
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Firestore API error (${response.status}):`, errorText);
+    throw new Error(`Firestore request failed: ${response.status} ${errorText}`);
+  }
+  
+  return await response.json();
+}
+
+// Helper to convert Firestore document
+function convertFirestoreDoc(doc: any): any {
+  const fields = doc.fields || {};
+  const result: any = { id: doc.name.split('/').pop() };
+  
+  Object.keys(fields).forEach(key => {
+    const field = fields[key];
+    if (field.stringValue !== undefined) result[key] = field.stringValue;
+    else if (field.integerValue !== undefined) result[key] = Number(field.integerValue);
+    else if (field.doubleValue !== undefined) result[key] = Number(field.doubleValue);
+    else if (field.booleanValue !== undefined) result[key] = field.booleanValue;
+    else if (field.timestampValue !== undefined) result[key] = field.timestampValue;
+    else if (field.nullValue !== undefined) result[key] = null;
+    else if (field.mapValue?.fields) {
+      const nested: any = {};
+      Object.keys(field.mapValue.fields).forEach(nestedKey => {
+        const nestedField = field.mapValue.fields[nestedKey];
+        if (nestedField.stringValue !== undefined) nested[nestedKey] = nestedField.stringValue;
+        else if (nestedField.integerValue !== undefined) nested[nestedKey] = Number(nestedField.integerValue);
+        else if (nestedField.doubleValue !== undefined) nested[nestedKey] = Number(nestedField.doubleValue);
+      });
+      result[key] = nested;
+    }
+  });
+  
+  return result;
+}
+
+async function getCollectionData(collection: string, filters?: { field: string, value: any }[]) {
+  try {
+    const response = await firestoreRequest(`/${collection}`);
+    if (!response.documents) return [];
+    
+    let documents = response.documents.map(convertFirestoreDoc);
+    
+    if (filters) {
+      filters.forEach(filter => {
+        documents = documents.filter((doc: any) => doc[filter.field] === filter.value);
+      });
+    }
+    
+    return documents;
+  } catch (error) {
+    console.error(`Error fetching ${collection}:`, error);
+    return [];
+  }
+}
+
+async function getDocument(collection: string, docId: string) {
+  try {
+    const response = await firestoreRequest(`/${collection}/${docId}`);
+    return convertFirestoreDoc(response);
+  } catch (error) {
+    console.error(`Error fetching document ${docId} from ${collection}:`, error);
+    return null;
+  }
+}
+
+async function updateDocument(collection: string, docId: string, data: any) {
+  const updateData = {
+    fields: {} as any
+  };
+
+  Object.keys(data).forEach(key => {
+    const value = data[key];
+    if (typeof value === 'string') updateData.fields[key] = { stringValue: value };
+    else if (typeof value === 'number') {
+      if (Number.isInteger(value)) updateData.fields[key] = { integerValue: value.toString() };
+      else updateData.fields[key] = { doubleValue: value };
+    }
+    else if (typeof value === 'boolean') updateData.fields[key] = { booleanValue: value };
+    else if (value === null) updateData.fields[key] = { nullValue: null };
+    else if (value instanceof Date) updateData.fields[key] = { timestampValue: value.toISOString() };
+    else if (typeof value === 'object') {
+      const mapFields: any = {};
+      Object.keys(value).forEach(subKey => {
+        const subValue = value[subKey];
+        if (typeof subValue === 'string') mapFields[subKey] = { stringValue: subValue };
+        else if (typeof subValue === 'number') mapFields[subKey] = { integerValue: subValue.toString() };
+      });
+      updateData.fields[key] = { mapValue: { fields: mapFields } };
+    }
+  });
+
+  return firestoreRequest(`/${collection}/${docId}`, 'PATCH', updateData);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -42,8 +160,6 @@ export async function GET(request: NextRequest) {
     const userPhone = searchParams.get('userPhone');
     const userRole = searchParams.get('userRole');
     const status = searchParams.get('status');
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
 
     // SUB-MODE 1A: Get payment history
     if (!type || type === 'payments') {
@@ -53,70 +169,36 @@ export async function GET(request: NextRequest) {
         }, { status: 400 });
       }
 
-      // Use 'any' type to avoid TypeScript query assignment issues
-      let query: any = db.collection('payments');
-
-      // Filter by user
+      let payments = await getCollectionData('payments');
+      
+      // Filter by user role
       if (userRole === 'user') {
-        query = query.where('customerPhone', '==', userPhone);
+        payments = payments.filter((p: any) => p.customerPhone === userPhone);
       } else if (userRole === 'worker') {
-        query = query.where('workerPhone', '==', userPhone);
+        payments = payments.filter((p: any) => p.workerPhone === userPhone);
       } else if (userRole === 'manager') {
-        // Managers see payments from their agents
-        const agentsSnapshot = await db.collection('workers')
-          .where('managerPhone', '==', userPhone)
-          .get();
+        // Get agents under this manager
+        const workers = await getCollectionData('workers');
+        const agentPhones = workers
+          .filter((w: any) => w.managerPhone === userPhone)
+          .map((w: any) => w.id);
         
-        const agentPhones: string[] = [];
-        agentsSnapshot.forEach((doc: any) => {
-          agentPhones.push(doc.id);
-        });
-
-        if (agentPhones.length === 0) {
-          return NextResponse.json({
-            success: true,
-            type: 'payments',
-            count: 0,
-            payments: []
-          });
-        }
-
-        query = query.where('workerPhone', 'in', agentPhones);
-      } else if (userRole === 'admin') {
-        // Admin sees all payments - no filter needed
-      } else {
-        return NextResponse.json({ error: 'Invalid user role' }, { status: 400 });
+        payments = payments.filter((p: any) => 
+          p.workerPhone && agentPhones.includes(p.workerPhone)
+        );
       }
+      // Admin sees all payments - no filter needed
 
       // Filter by status if provided
       if (status) {
-        query = query.where('status', '==', status);
+        payments = payments.filter((p: any) => p.status === status);
       }
 
-      // Filter by date range if provided
-      if (startDate) {
-        const start = new Date(startDate);
-        query = query.where('createdAt', '>=', start);
-      }
-
-      if (endDate) {
-        const end = new Date(endDate);
-        query = query.where('createdAt', '<=', end);
-      }
-
-      const snapshot = await query.orderBy('createdAt', 'desc').get();
-      const payments: any[] = [];
-      
-      snapshot.forEach((doc: any) => {
-        const data = doc.data();
-        payments.push({
-          id: doc.id,
-          ...data,
-          // Convert Firestore timestamps to ISO strings
-          createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt,
-          updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt,
-          completedAt: data.completedAt?.toDate?.()?.toISOString() || data.completedAt
-        });
+      // Sort by createdAt descending
+      payments.sort((a: any, b: any) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeB - timeA;
       });
       
       return NextResponse.json({
@@ -135,26 +217,18 @@ export async function GET(request: NextRequest) {
         }, { status: 400 });
       }
 
-      // Use 'any' type to avoid TypeScript query assignment issues
-      let query: any = db.collection('withdrawals').where('userPhone', '==', userPhone);
-
-      // Filter by status if provided
+      let withdrawals = await getCollectionData('withdrawals');
+      withdrawals = withdrawals.filter((w: any) => w.userPhone === userPhone);
+      
       if (status) {
-        query = query.where('status', '==', status);
+        withdrawals = withdrawals.filter((w: any) => w.status === status);
       }
 
-      const snapshot = await query.orderBy('requestedAt', 'desc').get();
-      const withdrawals: any[] = [];
-      
-      snapshot.forEach((doc: any) => {
-        const data = doc.data();
-        withdrawals.push({
-          id: doc.id,
-          ...data,
-          // Convert Firestore timestamps to ISO strings
-          requestedAt: data.requestedAt?.toDate?.()?.toISOString() || data.requestedAt,
-          processedAt: data.processedAt?.toDate?.()?.toISOString() || data.processedAt
-        });
+      // Sort by requestedAt descending
+      withdrawals.sort((a: any, b: any) => {
+        const timeA = a.requestedAt ? new Date(a.requestedAt).getTime() : 0;
+        const timeB = b.requestedAt ? new Date(b.requestedAt).getTime() : 0;
+        return timeB - timeA;
       });
       
       return NextResponse.json({
@@ -180,23 +254,20 @@ export async function GET(request: NextRequest) {
 
       if (userRole === 'worker') {
         // Get worker's completed tasks
-        const tasksSnapshot = await db.collection('tasks')
-          .where('assignedWorkerPhone', '==', userPhone)
-          .where('status', '==', 'completed')
-          .get();
+        const tasks = await getCollectionData('tasks');
+        const completedTasks = tasks.filter((t: any) => 
+          t.assignedWorkerPhone === userPhone && t.status === 'completed'
+        );
         
-        tasksSnapshot.forEach((doc: any) => {
-          const task = doc.data() as Task;
+        completedTasks.forEach((task: any) => {
           totalEarnings += (task.price || 0) * 0.30; // 30% commission
         });
 
         // Get worker's withdrawal requests
-        const withdrawalsSnapshot = await db.collection('withdrawals')
-          .where('userPhone', '==', userPhone)
-          .get();
+        const withdrawals = await getCollectionData('withdrawals');
+        const userWithdrawals = withdrawals.filter((w: any) => w.userPhone === userPhone);
         
-        withdrawalsSnapshot.forEach((doc: any) => {
-          const withdrawal = doc.data() as Withdrawal;
+        userWithdrawals.forEach((withdrawal: any) => {
           if (withdrawal.status === 'completed') {
             totalWithdrawn += withdrawal.amount || 0;
           } else if (withdrawal.status === 'pending') {
@@ -208,36 +279,31 @@ export async function GET(request: NextRequest) {
 
       } else if (userRole === 'manager') {
         // Get manager's team completed tasks
-        const agentsSnapshot = await db.collection('workers')
-          .where('managerPhone', '==', userPhone)
-          .get();
-        
-        const agentPhones: string[] = [];
-        agentsSnapshot.forEach((doc: any) => {
-          agentPhones.push(doc.id);
-        });
+        const workers = await getCollectionData('workers');
+        const agentPhones = workers
+          .filter((w: any) => w.managerPhone === userPhone)
+          .map((w: any) => w.id);
 
         if (agentPhones.length > 0) {
-          const tasksSnapshot = await db.collection('tasks')
-            .where('assignedWorkerPhone', 'in', agentPhones)
-            .where('status', '==', 'completed')
-            .get();
+          const tasks = await getCollectionData('tasks');
+          const completedTasks = tasks.filter((t: any) => 
+            t.assignedWorkerPhone && 
+            agentPhones.includes(t.assignedWorkerPhone) && 
+            t.status === 'completed'
+          );
           
           let totalAgentEarnings = 0;
-          tasksSnapshot.forEach((doc: any) => {
-            const task = doc.data() as Task;
+          completedTasks.forEach((task: any) => {
             totalAgentEarnings += (task.price || 0) * 0.30; // 30% agent commission
           });
 
           totalEarnings = totalAgentEarnings * 0.10; // 10% manager commission
 
           // Get manager's withdrawal requests
-          const withdrawalsSnapshot = await db.collection('withdrawals')
-            .where('userPhone', '==', userPhone)
-            .get();
+          const withdrawals = await getCollectionData('withdrawals');
+          const userWithdrawals = withdrawals.filter((w: any) => w.userPhone === userPhone);
           
-          withdrawalsSnapshot.forEach((doc: any) => {
-            const withdrawal = doc.data() as Withdrawal;
+          userWithdrawals.forEach((withdrawal: any) => {
             if (withdrawal.status === 'completed') {
               totalWithdrawn += withdrawal.amount || 0;
             } else if (withdrawal.status === 'pending') {
@@ -255,7 +321,7 @@ export async function GET(request: NextRequest) {
         userPhone,
         userRole,
         totalEarnings: Math.round(totalEarnings),
-        availableBalance: Math.round(availableBalance),
+        availableBalance: Math.max(0, Math.round(availableBalance)),
         pendingWithdrawals: Math.round(pendingWithdrawals),
         totalWithdrawn: Math.round(totalWithdrawn),
         currency: 'KES'
@@ -265,10 +331,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid type parameter' }, { status: 400 });
 
   } catch (error: any) {
-    console.error('Firestore error:', error);
+    console.error('Financial API GET error:', error);
     return NextResponse.json({ 
       error: 'Database error',
-      message: error.message
+      message: error.message || error.toString()
     }, { status: 500 });
   }
 }
@@ -295,29 +361,28 @@ export async function POST(request: NextRequest) {
       }
 
       // Verify task exists
-      const taskDoc = await db.collection('tasks').doc(taskId).get();
-      if (!taskDoc.exists) {
+      const task = await getDocument('tasks', taskId);
+      if (!task) {
         return NextResponse.json({ error: 'Task not found' }, { status: 404 });
       }
 
-      const paymentRef = db.collection('payments').doc();
       const paymentId = `PAY${Date.now()}${Math.floor(Math.random() * 1000)}`;
+      const now = new Date().toISOString();
       
       const paymentData = {
         id: paymentId,
-        paymentRef: paymentRef.id,
         taskId,
         amount: Number(amount),
         customerPhone: userPhone,
-        workerPhone: taskDoc.data()?.assignedWorkerPhone || null,
+        workerPhone: task.assignedWorkerPhone || null,
         method,
-        description: description || `Payment for task: ${taskDoc.data()?.title || 'Unknown'}`,
+        description: description || `Payment for task: ${task.title || 'Unknown'}`,
         status: 'completed', // Simulated payment is always successful
-        createdAt: FieldValue.serverTimestamp(),
-        completedAt: FieldValue.serverTimestamp()
+        createdAt: now,
+        completedAt: now
       };
 
-      await paymentRef.set(paymentData);
+      await updateDocument('payments', paymentId, paymentData);
 
       return NextResponse.json({
         success: true,
@@ -349,25 +414,23 @@ export async function POST(request: NextRequest) {
       let availableBalance = 0;
       
       if (userRole === 'worker') {
-        const tasksSnapshot = await db.collection('tasks')
-          .where('assignedWorkerPhone', '==', userPhone)
-          .where('status', '==', 'completed')
-          .get();
+        const tasks = await getCollectionData('tasks');
+        const completedTasks = tasks.filter((t: any) => 
+          t.assignedWorkerPhone === userPhone && t.status === 'completed'
+        );
         
         let totalEarnings = 0;
-        tasksSnapshot.forEach((doc: any) => {
-          const task = doc.data() as Task;
+        completedTasks.forEach((task: any) => {
           totalEarnings += (task.price || 0) * 0.30;
         });
 
-        const withdrawalsSnapshot = await db.collection('withdrawals')
-          .where('userPhone', '==', userPhone)
-          .where('status', 'in', ['completed', 'pending'])
-          .get();
+        const withdrawals = await getCollectionData('withdrawals');
+        const userWithdrawals = withdrawals.filter((w: any) => 
+          w.userPhone === userPhone && (w.status === 'completed' || w.status === 'pending')
+        );
         
         let totalWithdrawn = 0;
-        withdrawalsSnapshot.forEach((doc: any) => {
-          const withdrawal = doc.data() as Withdrawal;
+        userWithdrawals.forEach((withdrawal: any) => {
           totalWithdrawn += withdrawal.amount || 0;
         });
 
@@ -382,24 +445,23 @@ export async function POST(request: NextRequest) {
         }, { status: 400 });
       }
 
-      const withdrawalRef = db.collection('withdrawals').doc();
       const withdrawalId = `WD${Date.now()}${Math.floor(Math.random() * 1000)}`;
+      const now = new Date().toISOString();
       
       const withdrawalData = {
         id: withdrawalId,
-        withdrawalRef: withdrawalRef.id,
         userPhone,
         userRole,
         amount: Number(amount),
         method,
         accountDetails: accountDetails || {},
         status: 'pending',
-        requestedAt: FieldValue.serverTimestamp(),
+        requestedAt: now,
         processedBy: null,
         processedAt: null
       };
 
-      await withdrawalRef.set(withdrawalData);
+      await updateDocument('withdrawals', withdrawalId, withdrawalData);
 
       return NextResponse.json({
         success: true,
@@ -413,10 +475,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
 
   } catch (error: any) {
-    console.error('Firestore error:', error);
+    console.error('Financial API POST error:', error);
     return NextResponse.json({ 
       error: 'Database error',
-      message: error.message
+      message: error.message || error.toString()
     }, { status: 500 });
   }
 }
@@ -434,9 +496,10 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Admin phone is required' }, { status: 400 });
     }
 
-    // Verify admin
-    const adminDoc = await db.collection('admins').doc(adminPhone).get();
-    if (!adminDoc.exists) {
+    // Verify admin (using users API pattern)
+    const admins = await getCollectionData('admins');
+    const adminExists = admins.some((admin: any) => admin.id === adminPhone);
+    if (!adminExists) {
       return NextResponse.json({ error: 'Unauthorized: Admin only' }, { status: 403 });
     }
 
@@ -448,18 +511,17 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: 'Withdrawal ID and status are required' }, { status: 400 });
       }
 
-      const withdrawalRef = db.collection('withdrawals').doc(withdrawalId);
-      const withdrawalDoc = await withdrawalRef.get();
-
-      if (!withdrawalDoc.exists) {
+      const withdrawal = await getDocument('withdrawals', withdrawalId);
+      if (!withdrawal) {
         return NextResponse.json({ error: 'Withdrawal not found' }, { status: 404 });
       }
 
+      const now = new Date().toISOString();
       const updateData: any = {
         status,
         processedBy: adminPhone,
-        processedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp()
+        processedAt: now,
+        updatedAt: now
       };
 
       if (transactionId) {
@@ -470,7 +532,7 @@ export async function PUT(request: NextRequest) {
         updateData.adminNotes = notes;
       }
 
-      await withdrawalRef.update(updateData);
+      await updateDocument('withdrawals', withdrawalId, updateData);
 
       return NextResponse.json({
         success: true,
@@ -483,10 +545,10 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
 
   } catch (error: any) {
-    console.error('Firestore error:', error);
+    console.error('Financial API PUT error:', error);
     return NextResponse.json({ 
       error: 'Database error',
-      message: error.message
+      message: error.message || error.toString()
     }, { status: 500 });
   }
 }
