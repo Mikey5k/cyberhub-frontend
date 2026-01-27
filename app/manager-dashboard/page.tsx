@@ -15,7 +15,7 @@ import {
   Calendar, Clock, CheckCircle, XCircle, AlertCircle,
   MessageSquare, UserPlus, Package, CreditCard, PieChart,
   Target, Zap, Star, Award, Crown, ChartBar, Activity,
-  ClipboardCheck, Plus
+  ClipboardCheck, Plus, Phone, Mail, CheckSquare, Square
 } from 'lucide-react';
 
 interface Agent {
@@ -56,6 +56,25 @@ interface SupportRequest {
   createdAt: string;
 }
 
+// NEW: Manager Application interface
+interface ManagerApplication {
+  id: string;
+  name: string;
+  phone: string;
+  paymentVerified: boolean;
+  hardwareChecks: {
+    hasComputer: boolean;
+    hasInternet: boolean;
+    canUseWhatsAppWeb: boolean;
+    willingToLeadAgents: boolean;
+    canCommitHours: boolean;
+    availability: boolean;
+  };
+  status: "pending" | "approved" | "rejected";
+  appliedAt: string;
+  paymentDate?: string;
+}
+
 const MANAGER_COMMISSION_RATE = 0.10;
 
 // Helper functions for recruitment
@@ -77,6 +96,18 @@ const calculateDaysRemaining = (): number => {
   return Math.max(0, Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
 };
 
+// NEW: Function to generate WhatsApp link for manager applicants
+const generateWhatsAppLink = (phone: string, name: string, status: "approved" | "rejected") => {
+  const message = status === "approved" 
+    ? `Hi ${name}! Congratulations! Your manager application has been APPROVED. Welcome to CyberHub Manager Team! Please login with your phone number to access your dashboard.`
+    : `Hi ${name}! We appreciate your application. Unfortunately, your manager application has been REJECTED at this time. However, you still get access to our remote job boards for 1 year as per your subscription.`;
+  
+  const cleanedPhone = phone.replace(/\D/g, '');
+  const formattedPhone = cleanedPhone.startsWith('0') ? `254${cleanedPhone.substring(1)}` : cleanedPhone;
+  
+  return `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
+};
+
 export default function ManagerDashboard() {
   const router = useRouter();
   const { phone, role, loading, initializing } = usePhoneAuth();
@@ -84,6 +115,8 @@ export default function ManagerDashboard() {
   const [tasks, setTasks] = useState<TeamTask[]>([]);
   const [supportRequests, setSupportRequests] = useState<SupportRequest[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  // NEW: Manager applications state
+  const [managerApplications, setManagerApplications] = useState<ManagerApplication[]>([]);
   const [activeTab, setActiveTab] = useState("overview");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [newService, setNewService] = useState({
@@ -117,14 +150,20 @@ export default function ManagerDashboard() {
   const currentAgentsCount = agents.length;
   const recruitmentPercentage = Math.round((currentAgentsCount / 20) * 100);
   const currentPhase = currentAgentsCount < 10 ? 1 : currentAgentsCount < 20 ? 2 : 3;
+  
+  // NEW: Manager applications stats
+  const pendingManagerApps = managerApplications.filter(app => app.status === "pending").length;
+  const approvedManagerApps = managerApplications.filter(app => app.status === "approved").length;
+  const rejectedManagerApps = managerApplications.filter(app => app.status === "rejected").length;
 
   useEffect(() => {
-    if (!initializing && !loading && (!phone || role !== "admin")) {
+    // FIX: Allow both admin AND manager roles to access dashboard
+    if (!initializing && !loading && (!phone || (role !== "admin" && role !== "manager"))) {
       router.push("/login");
       return;
     }
 
-    if (!initializing && phone && role === "admin") {
+    if (!initializing && phone && (role === "admin" || role === "manager")) {
       loadDashboardData();
     }
   }, [phone, role, loading, initializing, router]);
@@ -157,11 +196,50 @@ export default function ManagerDashboard() {
         { id: "1", userPhone: "+254711223344", issue: "Payment not reflecting", status: "open", createdAt: "2024-02-10" },
         { id: "2", userPhone: "+254722334455", issue: "Service delay query", status: "resolved", createdAt: "2024-02-08" },
       ];
+      
+      // NEW: Mock manager applications data
+      const mockManagerApps: ManagerApplication[] = [
+        {
+          id: "1",
+          name: "John Doe",
+          phone: "+254712345678",
+          paymentVerified: true,
+          hardwareChecks: {
+            hasComputer: true,
+            hasInternet: true,
+            canUseWhatsAppWeb: true,
+            willingToLeadAgents: true,
+            canCommitHours: true,
+            availability: true
+          },
+          status: "pending",
+          appliedAt: "2024-02-15",
+          paymentDate: "2024-02-15"
+        },
+        {
+          id: "2",
+          name: "Jane Smith",
+          phone: "+254723456789",
+          paymentVerified: true,
+          hardwareChecks: {
+            hasComputer: true,
+            hasInternet: true,
+            canUseWhatsAppWeb: true,
+            willingToLeadAgents: true,
+            canCommitHours: true,
+            availability: true
+          },
+          status: "approved",
+          appliedAt: "2024-02-14",
+          paymentDate: "2024-02-14"
+        }
+      ];
 
       setAgents(mockAgents);
       setTasks(mockTasks);
       setServices(mockServices);
       setSupportRequests(mockSupport);
+      setManagerApplications(mockManagerApps); // NEW: Set manager applications
     } catch (error) {
       console.error("Failed to load dashboard data:", error);
     }
@@ -176,6 +254,48 @@ export default function ManagerDashboard() {
       ));
     } catch (error) {
       console.error("Failed to approve agent:", error);
+    }
+  };
+  
+  // NEW: Handle approve manager application
+  const handleApproveManager = async (applicationId: string) => {
+    try {
+      const app = managerApplications.find(a => a.id === applicationId);
+      if (!app) return;
+      
+      // Generate WhatsApp link for approval notification
+      const whatsappLink = generateWhatsAppLink(app.phone, app.name, "approved");
+      window.open(whatsappLink, '_blank');
+      
+      // Update status
+      setManagerApplications(prev => prev.map(app => 
+        app.id === applicationId ? { ...app, status: "approved" } : app
+      ));
+      
+      alert(`Approved manager application for ${app.name}. WhatsApp notification sent.`);
+    } catch (error) {
+      console.error("Failed to approve manager:", error);
+    }
+  };
+  
+  // NEW: Handle reject manager application
+  const handleRejectManager = async (applicationId: string) => {
+    try {
+      const app = managerApplications.find(a => a.id === applicationId);
+      if (!app) return;
+      
+      // Generate WhatsApp link for rejection notification
+      const whatsappLink = generateWhatsAppLink(app.phone, app.name, "rejected");
+      window.open(whatsappLink, '_blank');
+      
+      // Update status
+      setManagerApplications(prev => prev.map(app => 
+        app.id === applicationId ? { ...app, status: "rejected" } : app
+      ));
+      
+      alert(`Rejected manager application for ${app.name}. WhatsApp notification sent.`);
+    } catch (error) {
+      console.error("Failed to reject manager:", error);
     }
   };
 
@@ -227,8 +347,14 @@ export default function ManagerDashboard() {
     { id: "earnings", label: "Earnings", icon: <Wallet className="h-5 w-5" /> },
     { id: "support", label: "Support", icon: <MessageSquare className="h-5 w-5" /> },
     { id: "analytics", label: "Analytics", icon: <TrendingUp className="h-5 w-5" /> },
+    // NEW: Manager Applications tab (only for admin)
+    ...(role === "admin" ? [{ id: "manager-apps", label: "Manager Applications", icon: <ClipboardCheck className="h-5 w-5" /> }] : []),
     { id: "settings", label: "Settings", icon: <Settings className="h-5 w-5" /> },
   ];
+
+  // NEW: Display role-appropriate title
+  const userTitle = role === "admin" ? "Super Admin" : "Manager";
+  const userRoleDisplay = role === "admin" ? "Super Admin" : "Manager";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-gray-100">
@@ -250,7 +376,7 @@ export default function ManagerDashboard() {
                   <Crown className="h-6 w-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-black text-gray-900">Manager Hub</h1>
+                  <h1 className="text-2xl font-black text-gray-900">{userTitle} Hub</h1>
                   <p className="text-sm text-gray-600">Premium analytics & team management</p>
                 </div>
               </div>
@@ -275,10 +401,10 @@ export default function ManagerDashboard() {
               
               <div className="flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl">
                 <div className="h-9 w-9 bg-gradient-to-r from-[#ff6b35] to-[#ffa500] rounded-full flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">M</span>
+                  <span className="text-white font-bold text-sm">{userRoleDisplay.charAt(0)}</span>
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900">Admin</p>
+                  <p className="font-semibold text-gray-900">{userRoleDisplay}</p>
                   <p className="text-xs text-gray-600">{phone}</p>
                 </div>
               </div>
@@ -344,6 +470,25 @@ export default function ManagerDashboard() {
                 </div>
                 <p className="text-xs text-gray-600">{recruitmentPercentage}% complete • {recruitmentData.daysRemaining} days left</p>
               </div>
+              
+              {/* NEW: Manager Applications Mini Stats (Admin only) */}
+              {role === "admin" && pendingManagerApps > 0 && (
+                <div className="mt-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-200">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold text-gray-900">Manager Apps Pending</span>
+                    <span className="text-xs font-bold bg-amber-500 text-white px-2 py-1 rounded-full">
+                      {pendingManagerApps}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600">Require review & WhatsApp notification</p>
+                  <button
+                    onClick={() => setActiveTab("manager-apps")}
+                    className="w-full mt-3 text-xs font-semibold text-amber-700 hover:text-amber-800"
+                  >
+                    Review Now →
+                  </button>
+                </div>
+              )}
             </div>
           </aside>
         )}
@@ -396,10 +541,17 @@ export default function ManagerDashboard() {
                     <div className="p-3 bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl">
                       <Activity className="h-6 w-6 text-white" />
                     </div>
-                    <span className="text-xs font-semibold px-3 py-1 bg-amber-100 text-amber-700 rounded-full">{openSupportRequests} open</span>
+                    {/* NEW: Show manager apps pending for admin, support requests for manager */}
+                    {role === "admin" ? (
+                      <span className="text-xs font-semibold px-3 py-1 bg-amber-100 text-amber-700 rounded-full">{pendingManagerApps} pending</span>
+                    ) : (
+                      <span className="text-xs font-semibold px-3 py-1 bg-amber-100 text-amber-700 rounded-full">{openSupportRequests} open</span>
+                    )}
                   </div>
-                  <h3 className="text-3xl font-black text-gray-900 mb-2">{openSupportRequests}</h3>
-                  <p className="text-gray-600">Support Requests</p>
+                  <h3 className="text-3xl font-black text-gray-900 mb-2">
+                    {role === "admin" ? pendingManagerApps : openSupportRequests}
+                  </h3>
+                  <p className="text-gray-600">{role === "admin" ? "Manager Apps" : "Support Requests"}</p>
                   <div className="mt-4 h-2 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full"></div>
                 </div>
               </div>
@@ -507,16 +659,20 @@ export default function ManagerDashboard() {
                   </button>
 
                   <button
-                    onClick={() => setActiveTab("add-service")}
+                    onClick={() => role === "admin" ? setActiveTab("manager-apps") : setActiveTab("add-service")}
                     className="group p-6 bg-gradient-to-br from-amber-50 to-orange-100 rounded-2xl border border-amber-200 text-left hover:from-amber-100 hover:to-orange-200 transition-all hover:scale-[1.02]"
                   >
                     <div className="flex items-center gap-4">
                       <div className="p-3 bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl group-hover:scale-110 transition-transform">
-                        <Package className="h-6 w-6 text-white" />
+                        {role === "admin" ? <ClipboardCheck className="h-6 w-6 text-white" /> : <Package className="h-6 w-6 text-white" />}
                       </div>
                       <div>
-                        <h4 className="font-bold text-gray-900">Add Service</h4>
-                        <p className="text-sm text-gray-600 mt-1">Expand offerings</p>
+                        <h4 className="font-bold text-gray-900">
+                          {role === "admin" ? "Review Manager Apps" : "Add Service"}
+                        </h4>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {role === "admin" ? `${pendingManagerApps} pending review` : "Expand offerings"}
+                        </p>
                       </div>
                     </div>
                   </button>
@@ -1381,6 +1537,221 @@ export default function ManagerDashboard() {
             </div>
           )}
 
+          {/* NEW: Manager Applications Tab (Admin only) */}
+          {activeTab === "manager-apps" && role === "admin" && (
+            <div className="space-y-6">
+              <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 border border-gray-200/50 shadow-lg">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="text-2xl font-black text-gray-900">Manager Applications</h2>
+                    <p className="text-gray-600">Review and approve new manager applicants</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-semibold rounded-full">
+                      {pendingManagerApps} Pending Review
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                  <div className="bg-gradient-to-r from-amber-50 to-amber-100 p-6 rounded-2xl">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-white rounded-xl">
+                        <Clock className="h-6 w-6 text-amber-600" />
+                      </div>
+                      <div>
+                        <p className="text-3xl font-black text-gray-900">{pendingManagerApps}</p>
+                        <p className="text-gray-600">Pending</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-r from-green-50 to-green-100 p-6 rounded-2xl">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-white rounded-xl">
+                        <CheckCircle className="h-6 w-6 text-green-600" />
+                      </div>
+                      <div>
+                        <p className="text-3xl font-black text-gray-900">{approvedManagerApps}</p>
+                        <p className="text-gray-600">Approved</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-r from-red-50 to-red-100 p-6 rounded-2xl">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-white rounded-xl">
+                        <XCircle className="h-6 w-6 text-red-600" />
+                      </div>
+                      <div>
+                        <p className="text-3xl font-black text-gray-900">{rejectedManagerApps}</p>
+                        <p className="text-gray-600">Rejected</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <h3 className="text-lg font-bold text-gray-900">Application Review Process</h3>
+                  <div className="p-6 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-2xl border border-blue-200">
+                    <h4 className="font-bold text-gray-900 mb-4">📋 REVIEW CHECKLIST:</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-center gap-3">
+                        <CheckSquare className="h-5 w-5 text-green-500" />
+                        <span className="text-gray-700">Payment verified (Equilar Atieno + Ksh 100)</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <CheckSquare className="h-5 w-5 text-green-500" />
+                        <span className="text-gray-700">All 6 hardware checkboxes checked</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <CheckSquare className="h-5 w-5 text-green-500" />
+                        <span className="text-gray-700">Payment within last 24 hours</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <CheckSquare className="h-5 w-5 text-green-500" />
+                        <span className="text-gray-700">WhatsApp notification sent on action</span>
+                      </div>
+                    </div>
+                    <p className="mt-4 text-sm text-gray-600">
+                      <strong>Note:</strong> Clicking Approve/Reject will automatically send a WhatsApp message to the applicant.
+                      Approved applicants get manager account access. Rejected applicants still get 1-year job board access.
+                    </p>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-2xl border border-gray-200">
+                    <table className="min-w-full">
+                      <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
+                        <tr>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Applicant</th>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Phone</th>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Payment Status</th>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Applied On</th>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Status</th>
+                          <th className="px-6 py-4 text-left text-sm font-semibold text-gray-900">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {managerApplications.map((app) => (
+                          <tr key={app.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full flex items-center justify-center text-white font-bold">
+                                  {app.name.charAt(0)}
+                                </div>
+                                <div>
+                                  <p className="font-bold text-gray-900">{app.name}</p>
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {Object.entries(app.hardwareChecks).map(([key, value]) => (
+                                      <span key={key} className={`text-xs px-2 py-0.5 rounded-full ${
+                                        value ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                      }`}>
+                                        {key.replace(/([A-Z])/g, ' $1').trim()}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                <Phone className="h-4 w-4 text-gray-500" />
+                                <a 
+                                  href={`tel:${app.phone}`}
+                                  className="text-blue-600 hover:text-blue-800 font-medium"
+                                >
+                                  {app.phone}
+                                </a>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold ${
+                                app.paymentVerified
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-red-100 text-red-700"
+                              }`}>
+                                {app.paymentVerified ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                                {app.paymentVerified ? "Verified" : "Not Verified"}
+                              </span>
+                              {app.paymentDate && (
+                                <p className="text-xs text-gray-600 mt-1">{formatDate(app.paymentDate)}</p>
+                              )}
+                            </td>
+                            <td className="px-6 py-4">
+                              <p className="font-medium text-gray-900">{formatDate(app.appliedAt)}</p>
+                              <p className="text-xs text-gray-600">
+                                {Math.floor((new Date().getTime() - new Date(app.appliedAt).getTime()) / (1000 * 60 * 60 * 24))} days ago
+                              </p>
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold ${
+                                app.status === "approved"
+                                  ? "bg-green-100 text-green-700"
+                                  : app.status === "pending"
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-red-100 text-red-700"
+                              }`}>
+                                {app.status === "approved" && <CheckCircle className="h-3 w-3" />}
+                                {app.status === "pending" && <Clock className="h-3 w-3" />}
+                                {app.status === "rejected" && <XCircle className="h-3 w-3" />}
+                                {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                {app.status === "pending" ? (
+                                  <>
+                                    <button
+                                      onClick={() => handleApproveManager(app.id)}
+                                      className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-sm font-semibold rounded-lg hover:opacity-90"
+                                    >
+                                      Approve & Notify
+                                    </button>
+                                    <button
+                                      onClick={() => handleRejectManager(app.id)}
+                                      className="px-4 py-2 bg-gradient-to-r from-red-500 to-rose-600 text-white text-sm font-semibold rounded-lg hover:opacity-90"
+                                    >
+                                      Reject & Notify
+                                    </button>
+                                  </>
+                                ) : (
+                                  <div className="text-sm text-gray-600">
+                                    {app.status === "approved" ? "Already approved" : "Already rejected"}
+                                  </div>
+                                )}
+                                <button 
+                                  className="p-2 text-gray-600 hover:text-gray-900"
+                                  onClick={() => {
+                                    const whatsappLink = generateWhatsAppLink(
+                                      app.phone, 
+                                      app.name, 
+                                      app.status === "approved" ? "approved" : "rejected"
+                                    );
+                                    window.open(whatsappLink, '_blank');
+                                  }}
+                                >
+                                  <MessageSquare className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {managerApplications.length === 0 && (
+                    <div className="text-center py-12">
+                      <ClipboardCheck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold text-gray-900">No manager applications yet</h3>
+                      <p className="text-gray-600 mt-2">Applications will appear here once users apply through the manager application page.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Settings Tab */}
           {activeTab === "settings" && (
             <div className="space-y-6">
@@ -1391,7 +1762,7 @@ export default function ManagerDashboard() {
                   </div>
                   <div>
                     <h2 className="text-2xl font-black text-gray-900">Dashboard Settings</h2>
-                    <p className="text-gray-600">Customize your manager dashboard experience</p>
+                    <p className="text-gray-600">Customize your {userTitle.toLowerCase()} dashboard experience</p>
                   </div>
                 </div>
 
@@ -1427,7 +1798,13 @@ export default function ManagerDashboard() {
                     <div>
                       <h3 className="text-lg font-bold text-gray-900 mb-4">Notification Preferences</h3>
                       <div className="space-y-3">
-                        {['New agent applications', 'High-priority support requests', 'Withdrawal requests', 'Service approval needed'].map((item) => (
+                        {[
+                          'New agent applications', 
+                          'High-priority support requests', 
+                          'Withdrawal requests', 
+                          'Service approval needed',
+                          ...(role === "admin" ? ['New manager applications'] : [])
+                        ].map((item) => (
                           <div key={item} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-xl">
                             <span className="text-gray-700">{item}</span>
                             <div className="h-6 w-11 bg-gradient-to-r from-[#ff6b35] to-[#ffa500] rounded-full relative">
