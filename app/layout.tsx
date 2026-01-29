@@ -14,7 +14,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="font-sans antialiased subpixel-antialiased font-medium tracking-tight relative">
+      <body 
+        className="font-sans antialiased subpixel-antialiased font-medium tracking-tight relative"
+        suppressHydrationWarning
+      >
         {/* Navigation Bar - shows on all pages except landing page */}
         <NavBar />
         {children}

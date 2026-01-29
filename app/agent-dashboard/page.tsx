@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { usePhoneAuth } from "@/hooks/use-phone-auth";
-import { getAgentTasks, updateTask } from "@/lib/api"; // FIXED: Changed updateTaskStatus to updateTask
 import { formatCurrency } from "@/lib/utils";
 import { 
   Home, Briefcase, Wallet, Clock, CheckCircle, AlertCircle,
@@ -20,15 +19,109 @@ interface Task {
   description: string;
   category: string;
   price: number;
-  status: "pending" | "assigned" | "in_progress" | "completed" | "cancelled";
+  status: "pending" | "assigned" | "in_progress" | "completed" | "cancelled" | "awaiting_worker";
   assignedTo: string;
   assignedAt: string;
   completedAt?: string;
   clientPhone: string;
   requirements: string[];
+  workerPhone?: string;
+  assignedWorkerPhone?: string;
+  customerPhone?: string;
+  createdAt?: string;
 }
 
-const WORKER_COMMISSION_RATE = 0.30; // Internal calculation only
+const WORKER_COMMISSION_RATE = 0.30;
+
+// API functions
+async function getAgentTasks(phone: string): Promise<Task[]> {
+  try {
+    const response = await fetch(`/api/tasks?phone=${encodeURIComponent(phone)}&role=worker`);
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    if (data.success && data.tasks) {
+      // Map API tasks to our interface
+      return data.tasks.map((task: any) => ({
+        id: task.id,
+        title: task.title || 'Untitled Task',
+        description: task.description || '',
+        category: task.category || 'General',
+        price: task.price || 0,
+        status: task.status === 'in-progress' ? 'in_progress' : 
+                task.status === 'awaiting_worker' ? 'pending' : 
+                task.status as Task['status'],
+        assignedTo: task.assignedWorkerPhone || '',
+        assignedAt: task.createdAt || new Date().toISOString(),
+        completedAt: task.completedAt,
+        clientPhone: task.customerPhone || '',
+        requirements: task.requirements || [],
+        workerPhone: task.assignedWorkerPhone,
+        assignedWorkerPhone: task.assignedWorkerPhone,
+        customerPhone: task.customerPhone,
+        createdAt: task.createdAt
+      }));
+    }
+    return [];
+  } catch (error) {
+    console.error('Failed to fetch agent tasks:', error);
+    return [];
+  }
+}
+
+async function updateTask(taskId: string, updates: any): Promise<boolean> {
+  try {
+    const response = await fetch('/api/tasks', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        operation: 'update',
+        taskId,
+        ...updates
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.success === true;
+  } catch (error) {
+    console.error('Failed to update task:', error);
+    return false;
+  }
+}
+
+async function assignTask(taskId: string, workerPhone: string): Promise<boolean> {
+  try {
+    const response = await fetch('/api/tasks', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        operation: 'assign',
+        taskId,
+        workerPhone
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.success === true;
+  } catch (error) {
+    console.error('Failed to assign task:', error);
+    return false;
+  }
+}
 
 export default function AgentDashboard() {
   const router = useRouter();
@@ -97,12 +190,23 @@ export default function AgentDashboard() {
 
   const handleStatusUpdate = async (taskId: string, newStatus: Task["status"]) => {
     try {
-      // FIXED: Changed updateTaskStatus to updateTask
-      await updateTask(taskId, newStatus);
-      await loadTasks();
-      setIsModalOpen(false);
-      setSelectedTask(null);
-      setStatusUpdate("");
+      let success = false;
+      
+      if (newStatus === "assigned" || newStatus === "in_progress") {
+        // Assign task with worker's phone
+        success = await assignTask(taskId, phone!);
+      } else {
+        // Update task status
+        const apiStatus = newStatus === 'in_progress' ? 'in-progress' : newStatus;
+        success = await updateTask(taskId, { status: apiStatus });
+      }
+      
+      if (success) {
+        await loadTasks();
+        setIsModalOpen(false);
+        setSelectedTask(null);
+        setStatusUpdate("");
+      }
     } catch (error) {
       console.error("Failed to update status:", error);
     }
@@ -117,7 +221,7 @@ export default function AgentDashboard() {
     if (task) {
       setSelectedTask(task);
       setIsModalOpen(true);
-      setStatusUpdate("in_progress");
+      setStatusUpdate("assigned");
     }
   };
 
@@ -126,6 +230,7 @@ export default function AgentDashboard() {
       case "completed": return "bg-green-100 text-green-800";
       case "in_progress": return "bg-blue-100 text-blue-800";
       case "assigned": return "bg-yellow-100 text-yellow-800";
+      case "pending": return "bg-gray-100 text-gray-800";
       default: return "bg-gray-100 text-gray-800";
     }
   };
@@ -146,6 +251,7 @@ export default function AgentDashboard() {
       case "assigned": return "Assigned";
       case "pending": return "Pending";
       case "cancelled": return "Cancelled";
+      default: return status;
     }
   };
 
@@ -177,7 +283,6 @@ export default function AgentDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-gray-100">
-      {/* Modern Header */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-xl border-b border-gray-200/50 shadow-lg">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
@@ -233,7 +338,6 @@ export default function AgentDashboard() {
       </header>
 
       <div className="flex">
-        {/* Modern Sidebar */}
         {sidebarOpen && (
           <aside className="w-64 bg-white/90 backdrop-blur-sm border-r border-gray-200/50 min-h-[calc(100vh-80px)] sticky top-20">
             <div className="p-6">
@@ -287,14 +391,10 @@ export default function AgentDashboard() {
           </aside>
         )}
 
-        {/* Main Content */}
         <main className="flex-1 p-6">
-          {/* Overview Tab */}
           {activeTab === "overview" && (
             <div className="space-y-6">
-              {/* Stats Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {/* Available Balance Card with Withdraw Button */}
                 <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 border border-gray-200/50 shadow-lg hover:shadow-xl transition-shadow">
                   <div className="flex items-center justify-between mb-4">
                     <div className="p-3 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl">
@@ -313,7 +413,6 @@ export default function AgentDashboard() {
                   <p className="text-xs text-gray-500 mt-3">Next withdrawal: Wednesday</p>
                 </div>
 
-                {/* Total Earnings */}
                 <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 border border-gray-200/50 shadow-lg hover:shadow-xl transition-shadow">
                   <div className="flex items-center justify-between mb-4">
                     <div className="p-3 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl">
@@ -326,7 +425,6 @@ export default function AgentDashboard() {
                   <div className="mt-4 h-2 bg-gradient-to-r from-green-500 to-emerald-500 rounded-full"></div>
                 </div>
 
-                {/* Available Jobs */}
                 <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 border border-gray-200/50 shadow-lg hover:shadow-xl transition-shadow">
                   <div className="flex items-center justify-between mb-4">
                     <div className="p-3 bg-gradient-to-r from-amber-500 to-orange-500 rounded-xl">
@@ -344,7 +442,6 @@ export default function AgentDashboard() {
                   <div className="mt-4 h-2 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full"></div>
                 </div>
 
-                {/* Completed Tasks */}
                 <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 border border-gray-200/50 shadow-lg hover:shadow-xl transition-shadow">
                   <div className="flex items-center justify-between mb-4">
                     <div className="p-3 bg-gradient-to-r from-purple-500 to-violet-500 rounded-xl">
@@ -358,7 +455,6 @@ export default function AgentDashboard() {
                 </div>
               </div>
 
-              {/* Available Jobs Section */}
               <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 border border-gray-200/50 shadow-lg">
                 <div className="flex items-center justify-between mb-6">
                   <div>
@@ -417,9 +513,7 @@ export default function AgentDashboard() {
                 )}
               </div>
 
-              {/* In Progress & Completed Sections */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* In Progress Tasks */}
                 <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 border border-gray-200/50 shadow-lg">
                   <div className="flex items-center justify-between mb-6">
                     <div>
@@ -457,7 +551,6 @@ export default function AgentDashboard() {
                   </div>
                 </div>
 
-                {/* Completed Tasks */}
                 <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 border border-gray-200/50 shadow-lg">
                   <div className="flex items-center justify-between mb-6">
                     <div>
@@ -494,7 +587,6 @@ export default function AgentDashboard() {
             </div>
           )}
 
-          {/* Available Jobs Tab */}
           {activeTab === "available" && (
             <div className="space-y-6">
               <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 border border-gray-200/50 shadow-lg">
@@ -600,7 +692,6 @@ export default function AgentDashboard() {
             </div>
           )}
 
-          {/* In Progress Tab */}
           {activeTab === "inprogress" && (
             <div className="space-y-6">
               <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 border border-gray-200/50 shadow-lg">
@@ -707,7 +798,6 @@ export default function AgentDashboard() {
             </div>
           )}
 
-          {/* Completed Tab */}
           {activeTab === "completed" && (
             <div className="space-y-6">
               <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 border border-gray-200/50 shadow-lg">
@@ -800,7 +890,6 @@ export default function AgentDashboard() {
             </div>
           )}
 
-          {/* Earnings Tab */}
           {activeTab === "earnings" && (
             <div className="space-y-6">
               <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl p-6 border border-gray-200/50 shadow-lg">
@@ -887,17 +976,19 @@ export default function AgentDashboard() {
         </main>
       </div>
 
-      {/* Status Update Modal */}
       {isModalOpen && selectedTask && (
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
             <div className="p-6 border-b border-gray-200">
-              <h3 className="text-xl font-bold text-gray-900">Update Task Status</h3>
-              <p className="text-gray-600 mt-1">Update status for: {selectedTask.title}</p>
+              <h3 className="text-xl font-bold text-gray-900">Accept Job</h3>
+              <p className="text-gray-600 mt-1">You are about to accept: {selectedTask.title}</p>
+              <p className="text-sm text-gray-500 mt-2">
+                Your phone number ({phone}) will be shared with the client for WhatsApp communication.
+              </p>
             </div>
             <div className="p-6">
               <div className="space-y-4">
-                {["in_progress", "completed"].map((status) => (
+                {["assigned", "in_progress"].map((status) => (
                   <button
                     key={status}
                     onClick={() => handleStatusUpdate(selectedTask.id, status as Task["status"])}
@@ -910,12 +1001,12 @@ export default function AgentDashboard() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-semibold text-gray-900">
-                          {status === "in_progress" ? "Mark as In Progress" : "Mark as Completed"}
+                          {status === "assigned" ? "Accept Job" : "Accept & Start Working"}
                         </p>
                         <p className="text-sm text-gray-500 mt-1">
-                          {status === "in_progress"
-                            ? "You're actively working on this task"
-                            : "Task is finished and ready for review"}
+                          {status === "assigned"
+                            ? "Accept this job - client will see your WhatsApp"
+                            : "Accept and mark as in progress immediately"}
                         </p>
                       </div>
                       <div className={`h-6 w-6 rounded-full border-2 ${

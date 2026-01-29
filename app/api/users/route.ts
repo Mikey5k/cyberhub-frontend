@@ -1,16 +1,29 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-const PROJECT_ID = process.env.FIREBASE_PROJECT_ID;
-const API_KEY = process.env.FIREBASE_API_KEY;
+export const runtime = "edge";
 
-if (!PROJECT_ID || !API_KEY) {
-  console.error('Missing Firebase environment variables for Users API');
-}
+type User = {
+  id: string;
+  phone: string;
+  role: string;
+  name?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  status?: string;
+  [key: string]: any;
+};
 
-// Helper function to call Firestore REST API
-async function firestoreFetch(endpoint: string, method: string = 'GET', data?: any) {
-  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents${endpoint}?key=${API_KEY}`;
-  
+// Firestore REST API helper (same as tasks API)
+const FIRESTORE_URL = `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents`;
+
+async function firestoreRequest(endpoint: string, method: string = 'GET', body?: any) {
+  const url = `${FIRESTORE_URL}${endpoint}`;
+  const apiKey = process.env.FIREBASE_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("Firebase API key not configured");
+  }
+
   const options: RequestInit = {
     method,
     headers: {
@@ -18,221 +31,186 @@ async function firestoreFetch(endpoint: string, method: string = 'GET', data?: a
     },
   };
 
-  if (data && (method === 'POST' || method === 'PATCH' || method === 'PUT')) {
-    options.body = JSON.stringify(data);
+  if (body) {
+    options.body = JSON.stringify(body);
   }
 
-  const response = await fetch(url, options);
+  const response = await fetch(`${url}?key=${apiKey}`, options);
   
   if (!response.ok) {
     const errorText = await response.text();
-    console.error(`Firestore REST error (${response.status}):`, errorText);
-    throw new Error(`Firestore error: ${response.status} - ${errorText}`);
+    throw new Error(`Firestore request failed: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
   return response.json();
 }
 
-// Helper to transform Firestore document to object
-function transformDocument(doc: any) {
-  if (!doc || !doc.fields) return null;
-  
-  const docId = doc.name.split('/').pop();
-  const fields = doc.fields;
-  const result: any = { id: docId };
-  
-  Object.keys(fields).forEach(key => {
-    const field = fields[key];
-    if (field.stringValue !== undefined) {
-      result[key] = field.stringValue;
-    } else if (field.integerValue !== undefined) {
-      result[key] = parseInt(field.integerValue, 10);
-    } else if (field.doubleValue !== undefined) {
-      result[key] = parseFloat(field.doubleValue);
-    } else if (field.booleanValue !== undefined) {
-      result[key] = field.booleanValue;
-    } else if (field.arrayValue?.values) {
-      result[key] = field.arrayValue.values.map((item: any) => {
-        if (item.stringValue !== undefined) return item.stringValue;
-        return item;
-      });
-    } else if (field.timestampValue !== undefined) {
-      result[key] = field.timestampValue;
-    } else if (field.mapValue?.fields) {
-      result[key] = transformDocument({ fields: field.mapValue.fields });
-    }
-  });
-  
-  return result;
-}
-
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const phoneEncoded = searchParams.get("phone") || "";
-    const phone = decodeURIComponent(phoneEncoded);
+    const { searchParams } = new URL(request.url);
+    const phone = searchParams.get('phone');
 
     if (!phone) {
-      return Response.json(
-        { error: "Phone number is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Phone number is required' 
+      }, { status: 400 });
     }
 
-    // Handle + sign converted to space in URL
-    let searchPhone = phone;
-    if (phone.startsWith(" ") && phone.length > 1) {
-      searchPhone = "+" + phone.substring(1);
+    // Normalize phone
+    let searchPhone = decodeURIComponent(phone);
+    if (searchPhone.startsWith(' ')) {
+      searchPhone = '+' + searchPhone.substring(1);
+    }
+    
+    // Clean phone for document ID (Firestore doesn't allow + in doc IDs)
+    const docId = searchPhone.replace(/\+/g, '_plus_');
+
+    console.log('GET User lookup - Phone:', { original: phone, normalized: searchPhone, docId });
+
+    // Try to get user from users collection
+    try {
+      const result = await firestoreRequest(`/users/${docId}`);
+      
+      if (result && result.fields) {
+        const userData = {
+          id: docId,
+          phone: searchPhone,
+          ...Object.fromEntries(
+            Object.entries(result.fields).map(([key, value]: [string, any]) => [
+              key,
+              value.stringValue || value.integerValue || value.doubleValue || 
+              value.booleanValue || value.timestampValue || value.arrayValue || 
+              value.mapValue || value.nullValue || value
+            ])
+          )
+        };
+
+        return NextResponse.json({
+          success: true,
+          user: userData
+        });
+      }
+    } catch (error: any) {
+      // User not found in users collection
+      console.log('User not found in main collection, trying role collections:', error.message);
     }
 
-    console.log("GET User lookup - Phone:", {
-      original: phone,
-      searchPhone,
-      encoded: phoneEncoded
-    });
-
-    // Try multiple collection names with detailed logging
-    const collections = ["users", "clients", "workers", "admins", "managers"];
-    let userData = null;
-    let foundCollection = "";
-    const debugResults = [];
-
-    for (const collection of collections) {
+    // If not found in users, try role collections
+    const roleCollections = ['clients', 'workers', 'admins', 'managers'];
+    for (const collection of roleCollections) {
       try {
-        const endpoint = `/${collection}/${searchPhone}`;
-        const result = await firestoreFetch(endpoint, 'GET');
+        const result = await firestoreRequest(`/${collection}/${docId}`);
         
-        // Check if document exists (has fields property)
-        const exists = result && result.fields;
-        debugResults.push({ collection, exists, id: searchPhone });
+        if (result && result.fields) {
+          const userData = {
+            id: docId,
+            phone: searchPhone,
+            ...Object.fromEntries(
+              Object.entries(result.fields).map(([key, value]: [string, any]) => [
+                key,
+                value.stringValue || value.integerValue || value.doubleValue || 
+                value.booleanValue || value.timestampValue || value.arrayValue || 
+                value.mapValue || value.nullValue || value
+              ])
+            )
+          };
 
-        if (exists) {
-          userData = transformDocument(result);
-          foundCollection = collection;
-          break;
+          return NextResponse.json({
+            success: true,
+            user: userData
+          });
         }
-      } catch (error: any) {
-        // If document doesn't exist, Firestore returns 404
-        if (error.message.includes('404')) {
-          debugResults.push({ collection, exists: false, error: 'Not found' });
-        } else {
-          debugResults.push({ collection, error: error.message, exists: false });
-        }
+      } catch (error) {
+        // Continue to next collection
+        continue;
       }
     }
 
-    console.log("User lookup debug:", { searchPhone, debugResults });
+    // User not found
+    return NextResponse.json({
+      success: false,
+      error: 'User not found',
+      phone: searchPhone
+    }, { status: 404 });
 
-    if (!userData) {
-      return Response.json({
-        error: "User not found",
-        debug: {
-          originalPhone: phone,
-          searchPhone,
-          phoneEncoded,
-          collectionsChecked: debugResults,
-          totalCollections: collections.length,
-          message: `Checked ${collections.length} collections, none contained user`
-        }
-      }, { status: 404 });
-    }
-
-    console.log("User found in collection:", foundCollection);
-    return Response.json({
-      success: true,
-      user: {
-        phone: searchPhone,
-        ...userData
-      },
-      foundIn: foundCollection,
-      debug: debugResults
-    });
   } catch (error: any) {
-    console.error("Users API GET error:", error);
-    return Response.json(
-      {
-        error: "Server error",
-        message: error.message
-      },
-      { status: 500 }
-    );
+    console.error('Users API GET error:', error);
+    return NextResponse.json({ 
+      success: false, 
+      error: error.message 
+    }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const phone = body.phone;
-    const role = body.role;
-    const name = body.name || "";
+    const { phone, role, name = '' } = body;
 
     if (!phone || !role) {
-      return Response.json(
-        { error: "Phone and role are required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ 
+        success: false,
+        error: 'Phone and role are required' 
+      }, { status: 400 });
     }
 
-    console.log("POST User creation - Phone:", phone, "Role:", role);
+    const normalizedPhone = phone.trim().replace(/\s+/g, '');
+    // Clean phone for document ID
+    const docId = normalizedPhone.replace(/\+/g, '_plus_');
 
-    // Determine collection based on role
-    let collectionName = "users";
-    if (["client", "user"].includes(role.toLowerCase())) {
-      collectionName = "clients";
-    } else if (["worker", "agent"].includes(role.toLowerCase())) {
-      collectionName = "workers";
-    } else if (role.toLowerCase() === "admin") {
-      collectionName = "admins";
-    } else if (role.toLowerCase() === "manager") {
-      collectionName = "managers";
-    }
+    console.log('POST User creation - Phone:', normalizedPhone, 'Role:', role, 'DocID:', docId);
 
-    console.log("Saving to collection:", collectionName);
+    // Determine primary collection based on role
+    const primaryCollection = role.toLowerCase() === 'user' ? 'clients' :
+                             role.toLowerCase() === 'worker' ? 'workers' :
+                             role.toLowerCase() === 'agent' ? 'workers' :
+                             role.toLowerCase() === 'manager' ? 'managers' : 'admins';
 
-    // Create user data for Firestore
     const userData = {
       fields: {
-        phone: { stringValue: phone },
-        role: { stringValue: role },
+        phone: { stringValue: normalizedPhone },
+        role: { stringValue: role.toLowerCase() },
         name: { stringValue: name },
         createdAt: { timestampValue: new Date().toISOString() },
         updatedAt: { timestampValue: new Date().toISOString() },
-        status: { stringValue: "active" }
+        status: { stringValue: 'active' },
+        primaryCollection: { stringValue: primaryCollection }
       }
     };
 
-    // Save to specific collection
-    const endpoint = `/${collectionName}/${phone}`;
-    await firestoreFetch(endpoint, 'PATCH', userData);
-
-    // Also save to generic users collection for easy lookup
-    const userGenericData = {
-      fields: {
-        phone: { stringValue: phone },
-        role: { stringValue: role },
-        name: { stringValue: name },
-        primaryCollection: { stringValue: collectionName },
-        createdAt: { timestampValue: new Date().toISOString() },
-        updatedAt: { timestampValue: new Date().toISOString() },
-        status: { stringValue: "active" }
-      }
-    };
-    
-    const genericEndpoint = `/users/${phone}`;
-    await firestoreFetch(genericEndpoint, 'PATCH', userGenericData);
-
-    return Response.json({
-      success: true,
-      message: "User created/updated successfully",
-      user: { phone, role, name },
-      savedTo: [collectionName, "users"]
+    // Store in main users collection
+    await firestoreRequest(`/users/${docId}`, 'PATCH', {
+      fields: userData.fields
     });
+
+    // Also store in role-specific collection
+    await firestoreRequest(`/${primaryCollection}/${docId}`, 'PATCH', {
+      fields: userData.fields
+    });
+
+    const responseData = {
+      id: docId,
+      phone: normalizedPhone,
+      role: role.toLowerCase(),
+      name,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      status: 'active',
+      primaryCollection
+    };
+
+    return NextResponse.json({
+      success: true,
+      message: 'User created/updated successfully',
+      user: responseData
+    }, { status: 201 });
+
   } catch (error: any) {
-    console.error("Create user error:", error);
-    return Response.json({
-      success: false,
-      error: "Failed to create user",
-      message: error.message
+    console.error('Create user error:', error);
+    return NextResponse.json({ 
+      success: false, 
+      error: error.message 
     }, { status: 500 });
   }
 }
