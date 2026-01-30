@@ -1,319 +1,358 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState, Suspense } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { 
-  Phone, ArrowRight, CheckCircle, AlertCircle, 
-  Zap, UserPlus, LogIn, Briefcase, Users, Sparkles
-} from "lucide-react";
+import { useSearchParams } from "next/navigation";
 
+// Create a separate component that uses useSearchParams
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<"signin" | "signup">("signin");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [name, setName] = useState("");
+  
+  // FIX: Use both callbackUrl AND redirect parameters for compatibility
+  const callbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect") || "/";
 
-  // Check for redirect parameter
-  const redirect = searchParams.get("redirect");
-
-  useEffect(() => {
-    // Check for existing phone in localStorage or sessionStorage
-    const savedPhone = localStorage.getItem("cyberhub_phone");
-    if (savedPhone) {
-      setPhone(savedPhone);
-    }
-  }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
-    setSuccess("");
-
-    if (!phone.match(/^\+?[0-9\s\-\(\)]{10,}$/)) {
-      setError("Please enter a valid phone number (e.g., +254712345678)");
-      setLoading(false);
-      return;
-    }
-
-    if (isSignUp && !name.trim()) {
-      setError("Please enter your full name");
-      setLoading(false);
-      return;
-    }
 
     try {
-      const formattedPhone = phone.startsWith("+") ? phone : `+${phone.replace(/\D/g, "")}`;
+      const response = await fetch('/api/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
 
-      if (isSignUp) {
-        // Sign up logic
-        const response = await fetch('/api/users', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            phone: formattedPhone,
-            name: name.trim(),
-            role: 'user'
-          }),
-        });
+      const result = await response.json();
 
-        const data = await response.json();
-
-        if (data.success) {
-          setSuccess("Account created successfully! Redirecting to login...");
-          setTimeout(() => {
-            setIsSignUp(false);
-            setSuccess("");
-          }, 2000);
-        } else {
-          throw new Error(data.error || "Sign up failed");
-        }
+      if (result.success) {
+        // Store in BOTH localStorage AND sessionStorage for compatibility
+        localStorage.setItem('cyberhub_token', result.token);
+        localStorage.setItem('cyberhub_user', JSON.stringify(result.user));
+        localStorage.setItem('cyberhub_role', result.user.role);
+        localStorage.setItem('cyberhub_email', result.user.email);
+        localStorage.setItem('cyberhub_phone', result.user.phone || '');
+        
+        // Also store in sessionStorage
+        sessionStorage.setItem('cyberhub_token', result.token);
+        sessionStorage.setItem('cyberhub_user', JSON.stringify(result.user));
+        sessionStorage.setItem('cyberhub_role', result.user.role);
+        sessionStorage.setItem('cyberhub_email', result.user.email);
+        sessionStorage.setItem('cyberhub_phone', result.user.phone || '');
+        
+        console.log('Login successful, redirecting to:', callbackUrl);
+        router.push(callbackUrl);
       } else {
-        // Login logic
-        const response = await fetch(`/api/users?phone=${encodeURIComponent(formattedPhone)}`);
-        const data = await response.json();
-
-        if (data.success) {
-          // Store user data
-          localStorage.setItem("cyberhub_phone", formattedPhone);
-          localStorage.setItem("cyberhub_role", data.user.role || "user");
-          localStorage.setItem("cyberhub_name", data.user.name || "");
-
-          setSuccess(`Welcome back! Redirecting to ${data.user.role || 'user'} dashboard...`);
-
-          setTimeout(() => {
-            switch (data.user.role) {
-              case "admin":
-                router.push("/admin-dashboard");
-                break;
-              case "manager":
-                router.push("/manager-dashboard");
-                break;
-              case "worker":
-                router.push("/agent-dashboard");
-                break;
-              case "user":
-              default:
-                if (redirect) {
-                  router.push(redirect);
-                } else {
-                  router.push("/services");
-                }
-                break;
-            }
-          }, 1500);
-        } else {
-          throw new Error(data.error || "User not found");
-        }
+        setError(result.error || 'Login failed');
       }
-    } catch (err: any) {
-      console.error("Authentication error:", err);
-      setError(err.message || `Failed to ${isSignUp ? 'sign up' : 'login'}. Please try again.`);
+    } catch (err) {
+      setError("Network error. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white rounded-3xl overflow-hidden shadow-2xl border-2 border-gray-300 p-8">
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="bg-gradient-to-r from-[#ff6b35] to-[#ffa500] p-3 rounded-xl shadow-lg">
-                <Zap className="h-8 w-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-black text-gray-900">Veritas</h1>
-                <p className="text-sm text-gray-700 font-medium">CYBERHUB</p>
-              </div>
-            </div>
-            
-            <div className="flex gap-4 mb-6">
-              <button
-                onClick={() => setIsSignUp(false)}
-                className={`flex-1 py-3 rounded-xl font-bold text-lg transition-all ${
-                  !isSignUp 
-                    ? 'bg-gradient-to-r from-[#ff6b35] to-[#ffa500] text-white shadow-lg'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-3">
-                  <LogIn className="h-5 w-5" />
-                  Sign In
-                </div>
-              </button>
-              <button
-                onClick={() => setIsSignUp(true)}
-                className={`flex-1 py-3 rounded-xl font-bold text-lg transition-all ${
-                  isSignUp 
-                    ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-3">
-                  <UserPlus className="h-5 w-5" />
-                  Sign Up
-                </div>
-              </button>
-            </div>
+  const handleEmailSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
 
-            <h2 className="text-2xl font-black text-gray-900 mb-2">
-              {isSignUp ? 'Create Your Account' : 'Welcome Back'}
-            </h2>
-            <p className="text-gray-600">
-              {isSignUp 
-                ? 'Join thousands who trust Veritas for their digital services' 
-                : 'Sign in to access your dashboard and services'}
-            </p>
+    try {
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          email, 
+          password, 
+          name, 
+          phone: phone || undefined,
+          role: 'user'
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Store in BOTH localStorage AND sessionStorage for compatibility
+        localStorage.setItem('cyberhub_token', result.token);
+        localStorage.setItem('cyberhub_user', JSON.stringify(result.user));
+        localStorage.setItem('cyberhub_role', result.user.role);
+        localStorage.setItem('cyberhub_email', result.user.email);
+        localStorage.setItem('cyberhub_phone', result.user.phone || '');
+        
+        // Also store in sessionStorage
+        sessionStorage.setItem('cyberhub_token', result.token);
+        sessionStorage.setItem('cyberhub_user', JSON.stringify(result.user));
+        sessionStorage.setItem('cyberhub_role', result.user.role);
+        sessionStorage.setItem('cyberhub_email', result.user.email);
+        sessionStorage.setItem('cyberhub_phone', result.user.phone || '');
+        
+        console.log('Signup successful, redirecting to:', callbackUrl);
+        router.push(callbackUrl);
+      } else {
+        setError(result.error || 'Registration failed');
+      }
+    } catch (err) {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = () => {
+    // Pass both callbackUrl and redirect parameters for maximum compatibility
+    const redirectUrl = callbackUrl;
+    signIn("google", { 
+      callbackUrl: redirectUrl,
+      redirect: true 
+    });
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 via-blue-800 to-blue-950 p-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl mb-4 shadow-lg">
+            <span className="text-3xl font-bold text-white">V</span>
+          </div>
+          <h1 className="text-3xl font-bold text-white mb-2">Veritas CyberHub</h1>
+          <p className="text-blue-200">Premium digital services platform</p>
+        </div>
+
+        <div className="bg-white/10 backdrop-blur-lg rounded-2xl border border-white/20 p-6 shadow-2xl">
+          <div className="flex mb-6">
+            <button
+              onClick={() => setActiveTab("signin")}
+              className={`flex-1 py-3 text-center font-semibold rounded-l-xl transition-all ${
+                activeTab === "signin"
+                  ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white"
+                  : "bg-white/10 text-blue-200 hover:bg-white/20"
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => setActiveTab("signup")}
+              className={`flex-1 py-3 text-center font-semibold rounded-r-xl transition-all ${
+                activeTab === "signup"
+                  ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white"
+                  : "bg-white/10 text-blue-200 hover:bg-white/20"
+              }`}
+            >
+              Sign Up
+            </button>
           </div>
 
-          {/* Error/Success Messages */}
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-700">
-              <AlertCircle className="h-5 w-5" />
-              <span>{error}</span>
+            <div className="mb-4 p-3 bg-red-500/20 border border-red-500 rounded-lg">
+              <p className="text-red-200 text-center text-sm">{error}</p>
             </div>
           )}
 
-          {success && (
-            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center gap-3 text-green-700">
-              <CheckCircle className="h-5 w-5" />
-              <span>{success}</span>
-            </div>
-          )}
+          <div className="mb-6">
+            <button
+              onClick={handleGoogleSignIn}
+              className="w-full flex items-center justify-center gap-3 bg-white text-gray-800 hover:bg-gray-100 font-medium py-3 px-4 rounded-xl transition duration-200 mb-4"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              </svg>
+              Continue with Google
+            </button>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {isSignUp && (
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-white/20"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white/10 text-blue-200">Or continue with email</span>
+              </div>
+            </div>
+          </div>
+
+          {activeTab === "signin" ? (
+            <form onSubmit={handleEmailSignIn} className="space-y-4">
               <div>
-                <label className="block text-gray-900 font-semibold mb-2 flex items-center gap-2">
-                  <Users className="h-5 w-5 text-gray-500" />
-                  Full Name
-                </label>
+                <label htmlFor="email" className="block text-sm font-medium text-blue-200 mb-1">Email Address</label>
                 <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="John Doe"
-                  className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-[#ff6b35] focus:border-transparent"
+                  id="email"
+                  type="email"
                   required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="you@example.com"
                 />
               </div>
-            )}
 
-            <div>
-              <label className="block text-gray-900 font-semibold mb-2 flex items-center gap-2">
-                <Phone className="h-5 w-5 text-gray-500" />
-                Phone Number
-              </label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+254712345678"
-                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-[#ff6b35] focus:border-transparent"
-                required
-              />
-              <p className="text-gray-500 text-sm mt-2">
-                Enter your Kenyan phone number
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-blue-200 mb-1">Password</label>
+                <input
+                  id="password"
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin h-5 w-5 mr-2 text-white" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Signing In...
+                  </span>
+                ) : (
+                  "Sign In"
+                )}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleEmailSignUp} className="space-y-4">
+              <div>
+                <label htmlFor="signup-name" className="block text-sm font-medium text-blue-200 mb-1">Full Name</label>
+                <input
+                  id="signup-name"
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="John Doe"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="signup-email" className="block text-sm font-medium text-blue-200 mb-1">Email Address</label>
+                <input
+                  id="signup-email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="you@example.com"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="signup-phone" className="block text-sm font-medium text-blue-200 mb-1">Phone Number (Optional)</label>
+                <input
+                  id="signup-phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="+254 712 345 678"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="signup-password" className="block text-sm font-medium text-blue-200 mb-1">Password</label>
+                <input
+                  id="signup-password"
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="••••••••"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin h-5 w-5 mr-2 text-white" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Creating Account...
+                  </span>
+                ) : (
+                  "Create Account"
+                )}
+              </button>
+            </form>
+          )}
+
+          <div className="mt-6 pt-6 border-t border-white/20">
+            <p className="text-center text-blue-200 text-xs">
+              By continuing, you agree to our{" "}
+              <Link href="/terms" className="text-orange-400 hover:text-orange-300">Terms of Service</Link>{" "}
+              and{" "}
+              <Link href="/privacy" className="text-orange-400 hover:text-orange-300">Privacy Policy</Link>
+            </p>
+            <div className="text-center mt-4">
+              <p className="text-blue-300 text-sm">
+                Need help?{" "}
+                <a
+                  href="https://wa.me/254708949580"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-orange-400 hover:text-orange-300 font-medium"
+                >
+                  WhatsApp Support
+                </a>
               </p>
             </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className={`w-full py-4 rounded-xl font-bold text-lg transition-all ${
-                isSignUp
-                  ? 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-90'
-                  : 'bg-gradient-to-r from-[#ff6b35] to-[#ffa500] hover:opacity-90'
-              } text-white shadow-lg hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              {loading ? (
-                <div className="flex items-center justify-center gap-3">
-                  <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  {isSignUp ? 'Creating Account...' : 'Signing In...'}
-                </div>
-              ) : (
-                <div className="flex items-center justify-center gap-3">
-                  {isSignUp ? 'Create Account' : 'Sign In'}
-                  <ArrowRight className="h-5 w-5" />
-                </div>
-              )}
-            </button>
-          </form>
-
-          {/* Additional Options */}
-          <div className="mt-8 pt-8 border-t border-gray-200">
-            <p className="text-gray-600 text-center mb-4">
-              {isSignUp ? 'Already have an account?' : 'New to Veritas?'}
-              <button
-                onClick={() => setIsSignUp(!isSignUp)}
-                className="ml-2 font-bold text-[#ff6b35] hover:text-[#ff8c42]"
-              >
-                {isSignUp ? 'Sign In' : 'Create Account'}
-              </button>
-            </p>
-
-            <div className="grid grid-cols-3 gap-3 mt-6">
-              <Link href="/agent-signup" className="block">
-                <div className="bg-gradient-to-br from-emerald-50 to-green-50 border border-emerald-200 rounded-lg p-3 text-center hover:shadow-md transition-shadow">
-                  <div className="bg-emerald-100 p-2 rounded-lg inline-block mb-2">
-                    <Briefcase className="h-5 w-5 text-emerald-600" />
-                  </div>
-                  <p className="text-xs font-semibold text-gray-900">Become Agent</p>
-                </div>
-              </Link>
-              <Link href="/manager-signup" className="block">
-                <div className="bg-gradient-to-br from-purple-50 to-violet-50 border border-purple-200 rounded-lg p-3 text-center hover:shadow-md transition-shadow">
-                  <div className="bg-purple-100 p-2 rounded-lg inline-block mb-2">
-                    <Users className="h-5 w-5 text-purple-600" />
-                  </div>
-                  <p className="text-xs font-semibold text-gray-900">Become Manager</p>
-                </div>
-              </Link>
-              <Link href="/careers" className="block">
-                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 rounded-lg p-3 text-center hover:shadow-md transition-shadow">
-                  <div className="bg-blue-100 p-2 rounded-lg inline-block mb-2">
-                    <Sparkles className="h-5 w-5 text-blue-600" />
-                  </div>
-                  <p className="text-xs font-semibold text-gray-900">We're Hiring</p>
-                </div>
-              </Link>
-            </div>
           </div>
+        </div>
 
-          <div className="text-center mt-8 pt-6 border-t border-gray-200">
-            <p className="text-gray-600 text-sm">
-              By continuing, you agree to our{' '}
-              <a href="#" className="text-[#ff6b35] font-semibold hover:underline">Terms</a>{' '}
-              and{' '}
-              <a href="#" className="text-[#ff6b35] font-semibold hover:underline">Privacy</a>
-            </p>
-          </div>
+        <div className="mt-6 p-4 bg-blue-800/30 border border-blue-700/50 rounded-xl">
+          <p className="text-blue-200 text-sm text-center">
+            <span className="font-semibold">Production Ready:</span> Email authentication stores users in Firestore database.
+          </p>
         </div>
       </div>
     </div>
   );
 }
 
+// Loading fallback component
+function LoginLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 via-blue-800 to-blue-950">
+      <div className="text-center">
+        <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl mb-4 animate-pulse">
+          <span className="text-3xl font-bold text-white">V</span>
+        </div>
+        <p className="text-white text-lg">Loading login...</p>
+      </div>
+    </div>
+  );
+}
+
+// Main component with Suspense wrapper
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#ff6b35] mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading authentication...</p>
-        </div>
-      </div>
-    }>
+    <Suspense fallback={<LoginLoading />}>
       <LoginContent />
     </Suspense>
   );

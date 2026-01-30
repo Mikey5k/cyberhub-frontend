@@ -3,199 +3,107 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Shield, Briefcase, GraduationCap, Building, Home,
-  BrainCircuit, PiggyBank, Users, Settings, Upload,
-  Download, FileText, Edit, Trash2, Eye, Filter,
+  Shield, Upload, Download, FileText, Edit, Trash2,
   Search, CheckCircle, XCircle, Clock, AlertCircle,
   BarChart, PieChart, DollarSign, MapPin, Calendar,
-  MessageCircle, Phone, Mail, User, Key, Globe,
-  Wifi, Coffee, Book, TrendingUp, Square, ShieldCheck,
-  RefreshCw, MoreVertical, ArrowUpDown, ChevronDown,
-  ChevronRight, Plus, Minus, X, Check, Loader,
-  FileEdit, Database, Server, Cloud, Terminal,
-  Code, Palette, Bell, Settings as SettingsIcon,
-  Lock, Unlock, EyeOff, Eye as EyeIcon, DownloadCloud,
-  UploadCloud, Database as DatabaseIcon, HardDrive,
-  Cpu, MemoryStick, Network, Shield as ShieldIcon,
-  BookOpen, Award, Bed, Laptop, Smartphone, Tablet,
-  Monitor, Printer, Router, Server as ServerIcon,
-  Cloud as CloudIcon, Zap, Battery, Power, Activity,
-  Thermometer, Droplets, Sun, Moon, Star, Crown,
-  Target, TrendingDown, PieChart as PieChartIcon,
-  BarChart as BarChartIcon, LineChart, DollarSign as DollarIcon,
-  CreditCard, Wallet, Banknote, Coins, Receipt,
-  Calculator, Percent, ArrowUpRight, ArrowDownRight,
-  ArrowLeftRight, Maximize2, Minimize2, RotateCcw,
-  Play, Pause, Stop, SkipBack, SkipForward, FastForward,
-  Rewind, Volume2, VolumeX, Mic, MicOff, Video,
-  VideoOff, Camera, CameraOff, Headphones, Radio,
-  Music, Speaker, BellOff, BellRing, Heart,
-  ThumbsUp, ThumbsDown, Flag, FlagOff, Bookmark,
-  BookmarkCheck, Share2, ExternalLink, Link,
-  Link2, Unlink, LockKeyhole, KeyRound, Fingerprint,
-  ScanFace, QrCode, Barcode, Hash, AtSign,
-  Asterisk, PlusCircle, MinusCircle, XCircle as XCircleIcon,
-  CheckCircle as CheckCircleIcon, HelpCircle,
-  Info, AlertTriangle, AlertOctagon, AlertCircle as AlertCircleIcon,
-  Ban, RadioTower, Satellite, WifiOff, Bluetooth,
-  Usb, Cpu as CpuIcon, HardDrive as HardDriveIcon,
-  MemoryStick as MemoryStickIcon, Printer as PrinterIcon,
-  Mouse, Keyboard, Monitor as MonitorIcon, Smartphone as SmartphoneIcon,
-  Tablet as TabletIcon, Watch, Tv, Projector,
-  GamepadIcon, Joystick, Puzzle, Dice5, ChessKing,
-  Music2, Music3, Music4, Disc, Album, Tape,
-  Film, Clapperboard, Tv2, Video as VideoIcon,
-  Youtube, Twitch, Instagram, Facebook, Twitter,
-  Linkedin, Github, Gitlab, GitBranch, GitCommit,
-  GitPullRequest, GitMerge, Code2, Brackets,
-  Braces, Parentheses, Slash, Backslash, CurlyBraces,
-  AngleBrackets, Command, Option, Control, Shift,
-  Escape, Enter, Space, Delete, Backspace, Tab,
-  CapsLock, ShiftIcon as ShiftKey, Option as OptionKey,
-  Control as ControlKey, Command as CommandKey,
-  Windows, Apple, Linux, Chrome, Firefox, Safari,
-  Edge, Opera, InternetExplorer, Chrome as ChromeIcon,
-  Firefox as FirefoxIcon, Safari as SafariIcon,
-  Edge as EdgeIcon, Opera as OperaIcon, Globe2,
-  CloudRain, CloudSnow, CloudLightning, CloudDrizzle,
-  CloudFog, Sun as SunIcon, Moon as MoonIcon,
-  Star as StarIcon, Cloud as CloudIcon2, Umbrella,
-  Wind, Thermometer as ThermometerIcon, Droplets as DropletsIcon,
-  Flame, Snowflake, Trees, Mountain, Waves,
-  Ship, Anchor, Car, Bike, Bus, Train,
-  Tram, Plane, Rocket, UFO, Satellite as SatelliteIcon,
-  Robot, Ghost, Skull, Alien, Astronaut,
-  Medal, Trophy, Cup, Crown as CrownIcon,
-  Gem, Diamond, Heart as HeartIcon, Star as StarIcon2,
-  Moon as MoonIcon2, Sun as SunIcon2, Cloud as CloudIcon3,
-  Zap as ZapIcon, Flame as FlameIcon, Droplets as DropletsIcon2,
-  Snowflake as SnowflakeIcon, Wind as WindIcon,
-  Umbrella as UmbrellaIcon, Trees as TreesIcon,
-  Mountain as MountainIcon, Waves as WavesIcon,
-  Ship as ShipIcon, Anchor as AnchorIcon, Car as CarIcon,
-  Bike as BikeIcon, Bus as BusIcon, Train as TrainIcon,
-  Tram as TramIcon, Plane as PlaneIcon, Rocket as RocketIcon,
-  UFO as UFOIcon, Satellite as SatelliteIcon2,
-  Robot as RobotIcon, Ghost as GhostIcon, Skull as SkullIcon,
-  Alien as AlienIcon, Astronaut as AstronautIcon,
-  Medal as MedalIcon, Trophy as TrophyIcon, Cup as CupIcon,
-  Crown as CrownIcon2, Gem as GemIcon, Diamond as DiamondIcon,
-  Heart as HeartIcon2, Star as StarIcon3, Moon as MoonIcon3,
-  Sun as SunIcon3, Cloud as CloudIcon4, Zap as ZapIcon2,
-  Flame as FlameIcon2, Droplets as DropletsIcon3,
-  Snowflake as SnowflakeIcon2, Wind as WindIcon2,
-  Umbrella as UmbrellaIcon2, Trees as TreesIcon2,
-  Mountain as MountainIcon2, Waves as WavesIcon2,
-  Ship as ShipIcon2, Anchor as AnchorIcon2, Car as CarIcon2,
-  Bike as BikeIcon2, Bus as BusIcon2, Train as TrainIcon2,
-  Tram as TramIcon2, Plane as PlaneIcon2, Rocket as RocketIcon2,
-  UFO as UFOIcon2, Satellite as SatelliteIcon3,
-  Robot as RobotIcon2, Ghost as GhostIcon2, Skull as SkullIcon2,
-  Alien as AlienIcon2, Astronaut as AstronautIcon2,
-  Medal as MedalIcon2, Trophy as TrophyIcon2, Cup as CupIcon2,
-  Crown as CrownIcon3, Gem as GemIcon2, Diamond as DiamondIcon2,
-  Heart as HeartIcon3, Star as StarIcon4, Moon as MoonIcon4,
-  Sun as SunIcon4, Cloud as CloudIcon5, Zap as ZapIcon3,
-  Flame as FlameIcon3, Droplets as DropletsIcon4,
-  Snowflake as SnowflakeIcon3, Wind as WindIcon3,
-  Umbrella as UmbrellaIcon3, Trees as TreesIcon3,
-  Mountain as MountainIcon3, Waves as WavesIcon3,
-  Ship as ShipIcon3, Anchor as AnchorIcon3, Car as CarIcon3,
-  Bike as BikeIcon3, Bus as BusIcon3, Train as TrainIcon3,
-  Tram as TramIcon3, Plane as PlaneIcon3, Rocket as RocketIcon3,
-  UFO as UFOIcon3, Satellite as SatelliteIcon4,
-  Robot as RobotIcon3, Ghost as GhostIcon3, Skull as SkullIcon3,
-  Alien as AlienIcon3, Astronaut as AstronautIcon3
+  MessageCircle, Phone, Mail, User, Database as DatabaseIcon,
+  Settings, RefreshCw, Loader, Tag, Building, Megaphone,
+  CreditCard, Package, Layers, Users, UserPlus, UserCheck,
+  UserX, Wallet, Banknote, TrendingUp, Eye, Filter,
+  ChevronDown, ChevronUp, Crown, Key, Shield as ShieldIcon,
+  Check, X, MoreVertical, Download as DownloadIcon,
+  AlertTriangle, Info, Smartphone, MessageSquare, ShieldCheck
 } from 'lucide-react';
 
-interface ContentItem {
+interface User {
+  id: string;
+  phone: string;
+  role: 'admin' | 'manager' | 'agent' | 'worker' | 'user';
+  name?: string;
+  email?: string;
+  balance?: number;
+  totalEarnings?: number;
+  status: 'active' | 'pending' | 'suspended' | 'inactive' | 'whatsapp-pending';
+  referralCode?: string;
+  referredBy?: string;
+  joinDate: string;
+  lastActive?: string;
+  whatsappVerified?: boolean; // New: Track WhatsApp verification
+  transactions?: any[];
+  withdrawalRequests?: any[];
+}
+
+interface Campaign {
   id: string;
   title: string;
   description: string;
   category: string;
-  type: 'job' | 'bursary' | 'scholarship' | 'internship' | 'hostel' | 'government';
-  postedDate: string;
-  deadline?: string;
-  location?: string;
-  institution?: string;
-  amount?: number;
-  duration?: string;
-  requirements?: string[];
-  contact?: string;
-  status: 'active' | 'expired' | 'draft' | 'pending_approval' | 'approved' | 'rejected';
-  specificType?: string;
-  amenities?: string[];
-  salaryRange?: string;
-  jobType?: string;
-  fieldOfStudy?: string;
-  academicLevel?: string;
-  distanceFromCampus?: string;
-  createdBy?: string;
-  approvedBy?: string;
+  company: string;
+  startDate?: string;
+  endDate?: string;
+  discount?: string;
+  contactEmail?: string;
+  status: 'active' | 'expired' | 'draft';
+  approved: boolean;
   createdAt?: string;
+}
+
+interface WithdrawalRequest {
+  id: string;
+  userId: string;
+  userPhone: string;
+  amount: number;
+  status: 'pending' | 'approved' | 'rejected' | 'processed';
+  method: 'mpesa' | 'bank';
+  accountDetails: string;
+  requestedAt: string;
+  processedAt?: string;
+  processedBy?: string;
 }
 
 interface UploadResult {
   success: boolean;
   message: string;
   count?: number;
-  duplicates?: string[];
   error?: string;
-}
-
-interface ConfigSection {
-  id: string;
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  fields: ConfigField[];
-}
-
-interface ConfigField {
-  id: string;
-  label: string;
-  type: 'text' | 'number' | 'select' | 'textarea' | 'toggle' | 'color';
-  value: any;
-  options?: string[];
-  placeholder?: string;
-  helpText?: string;
 }
 
 export default function AdminDashboard() {
   const router = useRouter();
   const [phone, setPhone] = useState<string>('');
   const [role, setRole] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'upload' | 'config' | 'content'>('upload');
-  const [selectedContentType, setSelectedContentType] = useState<'jobs' | 'bursaries' | 'scholarships' | 'internships' | 'hostels' | 'e-citizen'>('jobs');
+  const [activeTab, setActiveTab] = useState<'users' | 'campaigns' | 'withdrawals'>('users');
   const [csvData, setCsvData] = useState<string>('');
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
-  const [configSections, setConfigSections] = useState<ConfigSection[]>([]);
-  const [contentItems, setContentItems] = useState<ContentItem[]>([]);
-  const [loadingContent, setLoadingContent] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingItem, setEditingItem] = useState<ContentItem | null>(null);
-  const [editForm, setEditForm] = useState({
-    title: '',
-    description: '',
-    amount: '',
-    location: '',
-    institution: '',
-    deadline: '',
-    duration: '',
-    requirements: ''
+  
+  // User Management State
+  const [users, setUsers] = useState<User[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [userSearch, setUserSearch] = useState('');
+  const [userFilter, setUserFilter] = useState<string>('all');
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [showUserDetails, setShowUserDetails] = useState(false);
+  
+  // Campaigns State
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
+  
+  // Withdrawals State
+  const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
+  const [loadingWithdrawals, setLoadingWithdrawals] = useState(false);
+  
+  // Stats
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalBalance: 0,
+    pendingUsers: 0,
+    whatsappPending: 0, // New: Users pending WhatsApp verification
+    activeUsers: 0,
+    totalWithdrawals: 0,
+    pendingWithdrawals: 0
   });
-
-  // Content type configurations
-  const contentTypes = [
-    { id: 'jobs', name: 'Job Opportunities', icon: <Briefcase className="h-4 w-4" />, color: 'blue' },
-    { id: 'bursaries', name: 'Bursaries', icon: <PiggyBank className="h-4 w-4" />, color: 'green' },
-    { id: 'scholarships', name: 'Scholarships', icon: <Award className="h-4 w-4" />, color: 'purple' },
-    { id: 'internships', name: 'Internships', icon: <BrainCircuit className="h-4 w-4" />, color: 'orange' },
-    { id: 'hostels', name: 'Hostels', icon: <Home className="h-4 w-4" />, color: 'pink' },
-    { id: 'e-citizen', name: 'E-Citizen Services', icon: <Shield className="h-4 w-4" />, color: 'indigo' },
-  ];
 
   // Get phone and role from localStorage
   useEffect(() => {
@@ -210,50 +118,197 @@ export default function AdminDashboard() {
       router.push('/login?redirect=/admin-dashboard');
     }
     
-    // Load initial content
-    fetchContent();
-    loadConfigSections();
+    // Load initial data
+    fetchUsers();
+    fetchCampaigns();
+    fetchWithdrawals();
   }, []);
 
-  // Fetch content based on selected type
-  const fetchContent = async () => {
+  // ================= USER MANAGEMENT =================
+  const fetchUsers = async () => {
     try {
-      setLoadingContent(true);
-      const typeMap: Record<string, string> = {
-        'jobs': 'job',
-        'bursaries': 'bursary',
-        'scholarships': 'scholarship',
-        'internships': 'internship',
-        'hostels': 'hostel',
-        'e-citizen': 'government'
-      };
-      
-      const response = await fetch(`/api/jobs?type=${typeMap[selectedContentType]}&phone=${phone}&role=admin`);
+      setLoadingUsers(true);
+      const response = await fetch('/api/users');
       const result = await response.json();
       
       if (result.success) {
-        setContentItems(result.data || []);
+        const usersData = result.data || [];
+        setUsers(usersData);
+        setFilteredUsers(usersData);
+        updateStats(usersData, withdrawals);
       } else {
-        console.error('Failed to fetch content:', result.error);
-        setContentItems([]);
+        console.error('Failed to fetch users:', result.error);
+        setUsers([]);
+        setFilteredUsers([]);
       }
     } catch (error) {
-      console.error('Error fetching content:', error);
-      setContentItems([]);
+      console.error('Error fetching users:', error);
+      setUsers([]);
+      setFilteredUsers([]);
     } finally {
-      setLoadingContent(false);
-      setRefreshing(false);
+      setLoadingUsers(false);
     }
   };
 
-  // Handle refresh
-  const handleRefresh = () => {
-    console.log('🔄 Admin: Manual refresh triggered');
-    setRefreshing(true);
-    fetchContent();
+  const updateStats = (usersList: User[], withdrawalsList: WithdrawalRequest[]) => {
+    const totalBalance = usersList.reduce((sum, user) => sum + (user.balance || 0), 0);
+    const pendingUsers = usersList.filter(u => u.status === 'pending').length;
+    const whatsappPending = usersList.filter(u => u.status === 'whatsapp-pending' || (u.status === 'pending' && !u.whatsappVerified)).length;
+    const activeUsers = usersList.filter(u => u.status === 'active').length;
+    const pendingWithdrawals = withdrawalsList.filter(w => w.status === 'pending').length;
+    const totalWithdrawals = withdrawalsList.reduce((sum, w) => sum + w.amount, 0);
+    
+    setStats({
+      totalUsers: usersList.length,
+      totalBalance,
+      pendingUsers,
+      whatsappPending,
+      activeUsers,
+      totalWithdrawals,
+      pendingWithdrawals
+    });
   };
 
-  // Handle CSV upload
+  const filterUsers = () => {
+    let filtered = users;
+    
+    // Apply role filter
+    if (userFilter !== 'all') {
+      if (userFilter === 'whatsapp-pending') {
+        filtered = filtered.filter(user => user.status === 'whatsapp-pending' || (user.status === 'pending' && !user.whatsappVerified));
+      } else {
+        filtered = filtered.filter(user => user.role === userFilter || user.status === userFilter);
+      }
+    }
+    
+    // Apply search
+    if (userSearch) {
+      const search = userSearch.toLowerCase();
+      filtered = filtered.filter(user => 
+        user.phone.toLowerCase().includes(search) ||
+        (user.name && user.name.toLowerCase().includes(search)) ||
+        (user.email && user.email.toLowerCase().includes(search))
+      );
+    }
+    
+    setFilteredUsers(filtered);
+  };
+
+  useEffect(() => {
+    filterUsers();
+  }, [userSearch, userFilter, users]);
+
+  // NEW: WhatsApp Verification Approval
+  const handleWhatsAppApprove = async (userId: string) => {
+    if (!confirm('Approve user after WhatsApp verification?\n\nMake sure you have:\n1. Received WhatsApp message\n2. Verified M-Pesa payment\n3. Checked the payment details')) return;
+    
+    try {
+      const response = await fetch(`/api/users?id=${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          status: 'active', 
+          approved: true,
+          whatsappVerified: true,
+          whatsappVerifiedAt: new Date().toISOString(),
+          whatsappVerifiedBy: phone || 'Admin'
+        })
+      });
+      
+      const result = await response.json();
+      if (result.success) {
+        fetchUsers();
+        alert('✅ User approved! User has been activated.');
+        
+        // Optional: Send WhatsApp notification to user
+        const user = users.find(u => u.id === userId);
+        if (user) {
+          // You can add WhatsApp notification logic here
+          console.log(`User ${user.phone} approved via WhatsApp verification`);
+        }
+      } else {
+        alert('Failed to approve user: ' + result.error);
+      }
+    } catch (error) {
+      console.error('Error approving user:', error);
+      alert('Error approving user');
+    }
+  };
+
+  const handleRejectUser = async (userId: string) => {
+    if (!confirm('Reject this user application?\n\nUser will need to reapply.')) return;
+    
+    try {
+      const response = await fetch(`/api/users?id=${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          status: 'inactive', 
+          approved: false,
+          rejectionReason: 'Application rejected after review'
+        })
+      });
+      
+      const result = await response.json();
+      if (result.success) {
+        fetchUsers();
+        alert('User application rejected!');
+      } else {
+        alert('Failed to reject user: ' + result.error);
+      }
+    } catch (error) {
+      console.error('Error rejecting user:', error);
+      alert('Error rejecting user');
+    }
+  };
+
+  const handleSuspendUser = async (userId: string) => {
+    if (!confirm('Suspend this user?\n\nUser will not be able to access services.')) return;
+    
+    try {
+      const response = await fetch(`/api/users?id=${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'suspended' })
+      });
+      
+      const result = await response.json();
+      if (result.success) {
+        fetchUsers();
+        alert('User suspended!');
+      } else {
+        alert('Failed to suspend user: ' + result.error);
+      }
+    } catch (error) {
+      console.error('Error suspending user:', error);
+      alert('Error suspending user');
+    }
+  };
+
+  // ================= CAMPAIGNS =================
+  const fetchCampaigns = async () => {
+    try {
+      setLoadingCampaigns(true);
+      const response = await fetch('/api/jobs?contentType=campaign');
+      const result = await response.json();
+      
+      if (result.success) {
+        setCampaigns(result.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching campaigns:', error);
+    } finally {
+      setLoadingCampaigns(false);
+    }
+  };
+
+  // CSV template for campaigns
+  const getCsvTemplate = () => {
+    return `title,description,category,company,startDate,endDate,discount,contactEmail
+Student Welcome Campaign,Special offers for new students,student-offer,Veritas CyberHub,2024-01-01,2024-03-31,15%,offers@veritascyberhub.com
+Government Services Promotion,Discount on bulk government services,government-promo,Veritas CyberHub,2024-02-01,2024-02-29,10%,gov@veritascyberhub.com`;
+  };
+
   const handleCsvUpload = async () => {
     if (!csvData.trim()) {
       setUploadResult({ success: false, message: 'Please paste CSV data' });
@@ -264,240 +319,174 @@ export default function AdminDashboard() {
     setUploadResult(null);
 
     try {
-      const response = await fetch('/api/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'bulkUpload',
-          type: selectedContentType,
-          csvData: csvData,
-          phone: phone,
-          role: 'admin'
-        })
+      const lines = csvData.trim().split('\n');
+      const headers = lines[0].split(',').map(h => h.trim());
+      const rows = lines.slice(1).map(line => {
+        const values = line.split(',').map(v => v.trim());
+        const row: any = {};
+        headers.forEach((header, index) => {
+          row[header] = values[index] || '';
+        });
+        return row;
       });
 
-      const result = await response.json();
-      setUploadResult(result);
+      const processedCampaigns = rows.map((row, index) => {
+        const campaign: any = {
+          title: row.title || `Campaign ${Date.now() + index}`,
+          description: row.description || 'No description',
+          category: row.category || 'general',
+          company: row.company || 'Veritas CyberHub',
+          startDate: row.startDate || new Date().toISOString().split('T')[0],
+          endDate: row.endDate || '',
+          discount: row.discount || '',
+          contactEmail: row.contactEmail || 'support@veritascyberhub.com',
+          contentType: 'campaign',
+          approved: true,
+          status: 'active',
+          postedBy: phone || 'Admin',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
 
-      if (result.success) {
-        setCsvData('');
-        // Auto-refresh content after successful upload
-        setTimeout(() => {
-          fetchContent();
-        }, 1000);
+        Object.keys(campaign).forEach(key => {
+          if (campaign[key] === undefined || campaign[key] === null || campaign[key] === '') {
+            delete campaign[key];
+          }
+        });
+
+        return campaign;
+      });
+
+      const createdCampaigns = [];
+      for (const campaign of processedCampaigns) {
+        try {
+          const campaignId = `campaign_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          
+          const response = await fetch('/api/jobs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(campaign)
+          });
+
+          const result = await response.json();
+          
+          if (result.success) {
+            createdCampaigns.push({ id: result.jobId || campaignId, ...campaign });
+          }
+        } catch (error) {
+          console.error('Error creating campaign:', error);
+        }
       }
+
+      setUploadResult({
+        success: true,
+        message: `Successfully uploaded ${createdCampaigns.length} campaigns`,
+        count: createdCampaigns.length
+      });
+
+      setCsvData('');
+      setTimeout(() => {
+        fetchCampaigns();
+      }, 1000);
+
     } catch (error) {
       console.error('Upload error:', error);
       setUploadResult({
         success: false,
-        message: 'Network error. Please try again.',
-        error: String(error)
+        message: 'Failed to process CSV data',
+        error: error instanceof Error ? error.message : 'Unknown error'
       });
     } finally {
       setUploading(false);
     }
   };
 
-  // Handle edit
-  const handleEdit = (item: ContentItem) => {
-    setEditingItem(item);
-    setEditForm({
-      title: item.title,
-      description: item.description,
-      amount: item.amount?.toString() || '',
-      location: item.location || '',
-      institution: item.institution || '',
-      deadline: item.deadline || '',
-      duration: item.duration || '',
-      requirements: item.requirements?.join(', ') || ''
-    });
-    setShowEditModal(true);
-  };
-
-  // Handle save edit
-  const handleSaveEdit = async () => {
-    if (!editingItem) return;
-
+  // ================= WITHDRAWALS =================
+  const fetchWithdrawals = async () => {
     try {
-      const response = await fetch(`/api/jobs?id=${editingItem.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...editForm,
-          amount: editForm.amount ? parseInt(editForm.amount) : 0,
-          requirements: editForm.requirements.split(',').map(r => r.trim()).filter(r => r)
-        })
-      });
-
-      const result = await response.json();
-      
-      if (result.success) {
-        // Update local state
-        setContentItems(prev => prev.map(item => 
-          item.id === editingItem.id 
-            ? { ...item, ...editForm, amount: editForm.amount ? parseInt(editForm.amount) : 0 }
-            : item
-        ));
-        setShowEditModal(false);
-        setEditingItem(null);
-        alert('Content updated successfully!');
-      } else {
-        alert('Failed to update: ' + (result.error || 'Unknown error'));
-      }
+      setLoadingWithdrawals(true);
+      // This would call a withdrawals API endpoint
+      // For now, we'll simulate data
+      const mockWithdrawals: WithdrawalRequest[] = [
+        {
+          id: '1',
+          userId: 'user1',
+          userPhone: '+254712345678',
+          amount: 5000,
+          status: 'pending',
+          method: 'mpesa',
+          accountDetails: '254712345678',
+          requestedAt: new Date().toISOString()
+        },
+        {
+          id: '2',
+          userId: 'user2',
+          userPhone: '+254723456789',
+          amount: 3000,
+          status: 'approved',
+          method: 'mpesa',
+          accountDetails: '254723456789',
+          requestedAt: new Date(Date.now() - 86400000).toISOString(),
+          processedAt: new Date().toISOString(),
+          processedBy: 'Admin'
+        }
+      ];
+      setWithdrawals(mockWithdrawals);
+      updateStats(users, mockWithdrawals);
     } catch (error) {
-      console.error('Error updating content:', error);
-      alert('Error updating content. Please try again.');
+      console.error('Error fetching withdrawals:', error);
+    } finally {
+      setLoadingWithdrawals(false);
     }
   };
 
-  // Handle delete
-  const handleDelete = async (item: ContentItem) => {
-    if (!confirm(`Are you sure you want to delete "${item.title}"?`)) return;
-
+  const handleProcessWithdrawal = async (withdrawalId: string) => {
+    if (!confirm('Mark this withdrawal as processed?\n\nMake sure you have sent the payment via M-Pesa/Bank.')) return;
+    
     try {
-      const response = await fetch(`/api/jobs?id=${item.id}`, {
-        method: 'DELETE',
-      });
-
-      const result = await response.json();
-      
-      if (result.success) {
-        // Remove from local state
-        setContentItems(prev => prev.filter(content => content.id !== item.id));
-        alert('Content deleted successfully!');
-      } else {
-        alert('Failed to delete: ' + (result.error || 'Unknown error'));
-      }
+      // API call to update withdrawal status
+      alert('Withdrawal marked as processed (manual processing required)');
+      fetchWithdrawals();
     } catch (error) {
-      console.error('Error deleting content:', error);
-      alert('Error deleting content. Please try again.');
+      console.error('Error processing withdrawal:', error);
+      alert('Error processing withdrawal');
     }
   };
 
-  // Load config sections
-  const loadConfigSections = () => {
-    const sections: ConfigSection[] = [
-      {
-        id: 'general',
-        title: 'General Settings',
-        description: 'Basic platform configuration',
-        icon: <Settings className="h-5 w-5" />,
-        fields: [
-          { id: 'platformName', label: 'Platform Name', type: 'text', value: 'Veritas CyberHub' },
-          { id: 'currency', label: 'Currency', type: 'select', value: 'KES', options: ['KES', 'USD', 'EUR'] },
-          { id: 'whatsappNumber', label: 'WhatsApp Support Number', type: 'text', value: '+254708949580' },
-          { id: 'supportEmail', label: 'Support Email', type: 'text', value: 'support@veritascyberhub.com' },
-        ]
-      },
-      {
-        id: 'pricing',
-        title: 'Pricing Configuration',
-        description: 'Subscription and service pricing',
-        icon: <DollarSign className="h-5 w-5" />,
-        fields: [
-          { id: 'basicPrice', label: 'Basic Plan (Monthly)', type: 'number', value: 50 },
-          { id: 'premiumPrice', label: 'Premium Plan (Monthly)', type: 'number', value: 300 },
-          { id: 'assistedApplication', label: 'Assisted Application Fee', type: 'number', value: 500 },
-          { id: 'autoApplication', label: 'Auto Application Fee', type: 'number', value: 3000 },
-        ]
-      },
-      {
-        id: 'appearance',
-        title: 'Appearance',
-        description: 'UI/UX customization',
-        icon: <Palette className="h-5 w-5" />,
-        fields: [
-          { id: 'primaryColor', label: 'Primary Color', type: 'color', value: '#ff6b35' },
-          { id: 'secondaryColor', label: 'Secondary Color', type: 'color', value: '#ffa500' },
-          { id: 'darkMode', label: 'Dark Mode', type: 'toggle', value: false },
-        ]
-      }
-    ];
-    setConfigSections(sections);
-  };
-
-  // Update config field
-  const updateConfigField = (sectionId: string, fieldId: string, value: any) => {
-    setConfigSections(prev => prev.map(section => {
-      if (section.id === sectionId) {
-        return {
-          ...section,
-          fields: section.fields.map(field => 
-            field.id === fieldId ? { ...field, value } : field
-          )
-        };
-      }
-      return section;
-    }));
-  };
-
-  // Save all config
-  const saveAllConfig = async () => {
-    try {
-      const allConfig: any = {};
-      configSections.forEach(section => {
-        section.fields.forEach(field => {
-          allConfig[field.id] = field.value;
-        });
-      });
-
-      const response = await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(allConfig)
-      });
-
-      const result = await response.json();
-      if (result.success) {
-        alert('Configuration saved successfully!');
-      } else {
-        alert('Failed to save configuration');
-      }
-    } catch (error) {
-      console.error('Error saving config:', error);
-      alert('Error saving configuration');
-    }
-  };
-
-  // Handle logout
-  const handleLogout = () => {
-    localStorage.removeItem('cyberhub_phone');
-    localStorage.removeItem('cyberhub_role');
-    sessionStorage.removeItem('cyberhub_phone');
-    sessionStorage.removeItem('cyberhub_role');
-    router.push('/login');
-  };
-
-  // Format amount
-  const formatAmount = (amount?: number) => {
-    if (!amount) return 'Negotiable';
+  // ================= UI HELPERS =================
+  const formatCurrency = (amount: number) => {
     return `KES ${amount.toLocaleString()}`;
   };
 
-  // Format date
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return 'N/A';
+  const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
-  // Get CSV template
-  const getCsvTemplate = () => {
-    const templates: Record<string, string> = {
-      'jobs': 'title,description,category,type,location,institution,amount,duration,requirements,jobType,salaryRange\nSoftware Developer,Build amazing software,Technology,job,Nairobi,Google Inc,150000,Full-time,"Bachelor in CS, 2+ years experience",Full-time,"150,000 - 200,000"\nData Analyst,Analyze business data,Business,job,Remote,Amazon,120000,Contract,"Statistics degree, SQL skills",Remote,"100,000 - 150,000"',
-      'bursaries': 'title,description,category,type,location,institution,amount,deadline,fieldOfStudy,academicLevel,requirements\nGovernment Bursary,Financial aid for students,Education,bursary,Nairobi,Ministry of Education,50000,2024-03-31,"All fields",Undergraduate,"Kenyan citizen, Need-based"\nCounty Bursary,County government bursary,Education,bursary,Mombasa,Mombasa County,40000,2024-04-15,"Medicine, Engineering",Diploma,"County resident, Good grades"',
-      'scholarships': 'title,description,category,type,location,institution,amount,deadline,fieldOfStudy,academicLevel,requirements\nMastercard Scholarship,Full scholarship for Africans,Education,scholarship,Nairobi,Mastercard Foundation,0,2024-02-28,"All fields",Undergraduate,"African citizen, Leadership potential"\nCoca-Cola Scholarship,Business scholarship,Education,scholarship,Nairobi,Coca-Cola,300000,2024-03-15,"Business, Marketing",Masters,"Entrepreneurial spirit"',
-      'internships': 'title,description,category,type,location,institution,amount,duration,fieldOfStudy,requirements\nSoftware Engineering Intern,Learn software development,Technology,internship,Nairobi,Safaricom,30000,6 months,"Computer Science","Programming skills, CS student"\nMarketing Intern,Digital marketing experience,Marketing,internship,Remote,Digitize Africa,25000,3 months,"Marketing, Business","Social media skills"',
-      'hostels': 'title,description,category,type,location,institution,amount,duration,amenities,distanceFromCampus\nUniversity Hostel,Secure student accommodation,Accommodation,hostel,Nairobi,UoN,15000,Academic year,"WiFi,Study Area,Security","On-campus"\nPrivate Hostel,Modern student hostel,Accommodation,hostel,Nairobi,Prime Hostels,18000,Monthly,"WiFi,Gym,Laundry,Cafeteria","Walking distance"',
-      'e-citizen': 'title,description,category,type,location,institution,amount,requirements,contact\nPassport Application,Apply for Kenyan passport,Government,government,Nairobi,Immigration Department,4500,"ID copy, Photos, Birth certificate",immigration@government.go.ke\nID Replacement,Replace lost ID card,Government,government,Nairobi,Registration Bureau,1000,"Police abstract, Old ID details",+254722000000'
-    };
-    return templates[selectedContentType] || '';
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case 'admin': return 'bg-red-100 text-red-800';
+      case 'manager': return 'bg-purple-100 text-purple-800';
+      case 'agent': return 'bg-blue-100 text-blue-800';
+      case 'worker': return 'bg-green-100 text-green-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
   };
 
-  // Copy template to clipboard
-  const copyTemplate = () => {
-    navigator.clipboard.writeText(getCsvTemplate());
-    alert('CSV template copied to clipboard!');
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'whatsapp-pending': return 'bg-blue-100 text-blue-800';
+      case 'suspended': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
   };
 
   return (
@@ -509,7 +498,7 @@ export default function AdminDashboard() {
             <div className="flex items-center">
               <div className="flex items-center gap-2">
                 <div className="bg-gradient-to-r from-[#ff6b35] to-[#ffa500] p-2 rounded-lg">
-                  <ShieldCheck className="h-5 w-5 text-white" />
+                  <Shield className="h-5 w-5 text-white" />
                 </div>
                 <span className="text-xl font-black bg-gradient-to-r from-[#ff6b35] to-[#ffa500] bg-clip-text text-transparent">
                   Veritas
@@ -529,18 +518,14 @@ export default function AdminDashboard() {
                 </div>
               )}
               
-              {/* Refresh Button - ADDED HERE */}
               <button
-                onClick={handleRefresh}
-                disabled={refreshing}
-                className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50"
-              >
-                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                <span className="text-sm font-medium">Refresh</span>
-              </button>
-              
-              <button
-                onClick={handleLogout}
+                onClick={() => {
+                  localStorage.removeItem('cyberhub_phone');
+                  localStorage.removeItem('cyberhub_role');
+                  sessionStorage.removeItem('cyberhub_phone');
+                  sessionStorage.removeItem('cyberhub_role');
+                  router.push('/login');
+                }}
                 className="text-sm font-semibold text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-lg hover:bg-gray-100"
               >
                 Sign Out
@@ -552,485 +537,589 @@ export default function AdminDashboard() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* WhatsApp Alert */}
+        <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <MessageCircle className="h-5 w-5 text-blue-600 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-blue-800">
+                <strong>WhatsApp Payment Verification:</strong> Users now send M-Pesa proof to WhatsApp (+254708949580). Verify payment there first, then approve here.
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                Look for messages with M-Pesa screenshots, then use "Approve (WhatsApp Verified)" button below.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Tabs */}
         <div className="flex border-b border-gray-200 mb-8">
           <button
-            onClick={() => setActiveTab('upload')}
+            onClick={() => setActiveTab('users')}
             className={`flex items-center gap-2 px-4 py-3 font-medium border-b-2 transition-colors ${
-              activeTab === 'upload'
+              activeTab === 'users'
                 ? 'border-[#ff6b35] text-[#ff6b35]'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
-            <Upload className="h-4 w-4" />
-            CSV Upload
+            <Users className="h-4 w-4" />
+            User Management
           </button>
           <button
-            onClick={() => setActiveTab('content')}
+            onClick={() => setActiveTab('withdrawals')}
             className={`flex items-center gap-2 px-4 py-3 font-medium border-b-2 transition-colors ${
-              activeTab === 'content'
+              activeTab === 'withdrawals'
                 ? 'border-[#ff6b35] text-[#ff6b35]'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
-            <DatabaseIcon className="h-4 w-4" />
-            Content Manager
+            <Wallet className="h-4 w-4" />
+            Withdrawals
           </button>
           <button
-            onClick={() => setActiveTab('config')}
+            onClick={() => setActiveTab('campaigns')}
             className={`flex items-center gap-2 px-4 py-3 font-medium border-b-2 transition-colors ${
-              activeTab === 'config'
+              activeTab === 'campaigns'
                 ? 'border-[#ff6b35] text-[#ff6b35]'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
-            <Settings className="h-4 w-4" />
-            Config Manager
+            <Megaphone className="h-4 w-4" />
+            Campaigns
           </button>
         </div>
 
-        {/* CSV Upload Tab */}
-        {activeTab === 'upload' && (
-          <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-lg">
-            <h2 className="text-2xl font-black text-gray-900 mb-2">Universal CSV Upload</h2>
-            <p className="text-gray-600 mb-6">Bulk upload content for all categories</p>
-
-            {/* Content Type Selection */}
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-3">Select Content Type</label>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                {contentTypes.map(type => (
-                  <button
-                    key={type.id}
-                    onClick={() => setSelectedContentType(type.id as any)}
-                    className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-colors ${
-                      selectedContentType === type.id
-                        ? `border-${type.color}-300 bg-${type.color}-50`
-                        : 'border-gray-300 bg-gray-50 hover:bg-gray-100'
-                    }`}
-                  >
-                    <div className={`p-3 rounded-lg mb-2 ${
-                      selectedContentType === type.id 
-                        ? `bg-${type.color}-100 text-${type.color}-600`
-                        : 'bg-gray-200 text-gray-600'
-                    }`}>
-                      {type.icon}
-                    </div>
-                    <span className="text-sm font-medium text-gray-700 text-center">{type.name}</span>
-                  </button>
-                ))}
+        {/* Stats Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Users</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.totalUsers}</p>
+              </div>
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <Users className="h-6 w-6 text-blue-600" />
               </div>
             </div>
+            <div className="mt-2 text-xs text-gray-500">
+              {stats.activeUsers} active • {stats.whatsappPending} WhatsApp pending
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">WhatsApp Pending</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.whatsappPending}</p>
+              </div>
+              <div className="p-3 bg-blue-100 rounded-lg">
+                <MessageCircle className="h-6 w-6 text-blue-600" />
+              </div>
+            </div>
+            <div className="mt-2 text-xs text-gray-500">
+              Awaiting WhatsApp verification
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Pending Withdrawals</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.pendingWithdrawals}</p>
+              </div>
+              <div className="p-3 bg-yellow-100 rounded-lg">
+                <AlertTriangle className="h-6 w-6 text-yellow-600" />
+              </div>
+            </div>
+            <div className="mt-2 text-xs text-gray-500">
+              Awaiting processing
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Withdrawn</p>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(stats.totalWithdrawals)}</p>
+              </div>
+              <div className="p-3 bg-purple-100 rounded-lg">
+                <TrendingUp className="h-6 w-6 text-purple-600" />
+              </div>
+            </div>
+            <div className="mt-2 text-xs text-gray-500">
+              All-time total
+            </div>
+          </div>
+        </div>
 
-            {/* CSV Input */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-3">
-                <label className="block text-sm font-medium text-gray-700">
-                  Paste CSV Data
-                </label>
-                <button
-                  onClick={copyTemplate}
-                  className="text-sm text-[#ff6b35] hover:text-[#ff8552] font-medium"
+        {/* USER MANAGEMENT TAB */}
+        {activeTab === 'users' && (
+          <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-lg">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-black text-gray-900">User Management</h2>
+                <p className="text-gray-600">Manage users - Verify WhatsApp payments then approve</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search users..."
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    className="pl-10 pr-4 py-2 bg-gray-50 border border-gray-300 rounded-lg"
+                  />
+                </div>
+                <select
+                  value={userFilter}
+                  onChange={(e) => setUserFilter(e.target.value)}
+                  className="px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg"
                 >
-                  Copy Template
+                  <option value="all">All Users</option>
+                  <option value="whatsapp-pending">WhatsApp Pending</option>
+                  <option value="pending">All Pending</option>
+                  <option value="active">Active</option>
+                  <option value="suspended">Suspended</option>
+                  <option value="admin">Admins</option>
+                  <option value="manager">Managers</option>
+                  <option value="agent">Agents</option>
+                  <option value="worker">Workers</option>
+                </select>
+                <button
+                  onClick={fetchUsers}
+                  className="p-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                >
+                  <RefreshCw className="h-4 w-4" />
                 </button>
               </div>
-              <textarea
-                value={csvData}
-                onChange={(e) => setCsvData(e.target.value)}
-                placeholder="Paste your CSV data here (with headers)..."
-                className="w-full h-64 px-4 py-3 bg-gray-50 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-[#ff6b35] focus:border-transparent font-mono text-sm"
-                spellCheck={false}
-              />
-              <p className="mt-2 text-sm text-gray-500">
-                CSV format: Use commas to separate values, first row as headers
-              </p>
             </div>
 
-            {/* Upload Button */}
-            <button
-              onClick={handleCsvUpload}
-              disabled={uploading || !csvData.trim()}
-              className="w-full py-4 bg-gradient-to-r from-[#ff6b35] to-[#ffa500] text-white font-bold rounded-xl hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {uploading ? (
-                <>
-                  <Loader className="h-5 w-5 animate-spin" />
-                  Uploading...
-                </>
-              ) : (
-                <>
-                  <Upload className="h-5 w-5" />
-                  Upload {contentTypes.find(t => t.id === selectedContentType)?.name}
-                </>
-              )}
-            </button>
-
-            {/* Upload Result */}
-            {uploadResult && (
-              <div className={`mt-6 p-4 rounded-xl ${
-                uploadResult.success 
-                  ? 'bg-green-50 border border-green-200' 
-                  : 'bg-red-50 border border-red-200'
-              }`}>
-                <div className="flex items-start gap-3">
-                  {uploadResult.success ? (
-                    <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
-                  ) : (
-                    <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
-                  )}
-                  <div>
-                    <p className={`font-medium ${
-                      uploadResult.success ? 'text-green-800' : 'text-red-800'
-                    }`}>
-                      {uploadResult.message}
-                    </p>
-                    {uploadResult.count !== undefined && (
-                      <p className="text-sm text-green-700 mt-1">
-                        Successfully uploaded {uploadResult.count} items
-                      </p>
-                    )}
-                    {uploadResult.duplicates && uploadResult.duplicates.length > 0 && (
-                      <p className="text-sm text-yellow-700 mt-1">
-                        Found {uploadResult.duplicates.length} duplicate(s) - skipped
-                      </p>
-                    )}
-                    {uploadResult.error && (
-                      <p className="text-sm text-red-700 mt-1 font-mono">
-                        {uploadResult.error}
-                      </p>
-                    )}
-                  </div>
+            {loadingUsers ? (
+              <div className="text-center py-12">
+                <Loader className="h-8 w-8 text-blue-600 animate-spin mx-auto mb-4" />
+                <p className="text-gray-600">Loading users...</p>
+              </div>
+            ) : filteredUsers.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">User</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Role</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Balance</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Join Date</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.map(user => (
+                      <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-3 px-4">
+                          <div>
+                            <div className="font-medium text-gray-900">{user.phone}</div>
+                            {user.name && (
+                              <div className="text-sm text-gray-600">{user.name}</div>
+                            )}
+                            {user.email && (
+                              <div className="text-xs text-gray-500">{user.email}</div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`px-3 py-1 text-xs font-medium rounded-full ${getRoleColor(user.role)}`}>
+                            {user.role.toUpperCase()}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-gray-900">
+                            {formatCurrency(user.balance || 0)}
+                          </div>
+                          {user.totalEarnings && (
+                            <div className="text-xs text-gray-500">
+                              Total: {formatCurrency(user.totalEarnings)}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1">
+                            <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(user.status)}`}>
+                              {user.status === 'whatsapp-pending' ? 'WHATSAPP PENDING' : user.status.toUpperCase()}
+                            </span>
+                            {user.whatsappVerified && (
+                              <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full flex items-center gap-1">
+                                <Check className="h-3 w-3" />
+                                WhatsApp
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-600">
+                          {formatDate(user.joinDate)}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            {(user.status === 'pending' || user.status === 'whatsapp-pending') && (
+                              <>
+                                <button
+                                  onClick={() => handleWhatsAppApprove(user.id)}
+                                  className="p-2 bg-green-600 text-white hover:bg-green-700 rounded-lg flex items-center gap-1 text-sm font-medium"
+                                  title="Approve (WhatsApp Verified)"
+                                >
+                                  <ShieldCheck className="h-3 w-3" />
+                                  <span className="hidden sm:inline">Approve</span>
+                                </button>
+                                <button
+                                  onClick={() => handleRejectUser(user.id)}
+                                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                                  title="Reject Application"
+                                >
+                                  <UserX className="h-4 w-4" />
+                                </button>
+                              </>
+                            )}
+                            {user.status === 'active' && (
+                              <button
+                                onClick={() => handleSuspendUser(user.id)}
+                                className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg"
+                                title="Suspend User"
+                              >
+                                <UserX className="h-4 w-4" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setShowUserDetails(true);
+                              }}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                              title="View Details"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-gray-50 rounded-xl">
+                <div className="bg-gradient-to-r from-gray-100 to-gray-200 p-4 rounded-2xl inline-block mb-4">
+                  <Users className="h-12 w-12 text-gray-400" />
                 </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">No Users Found</h3>
+                <p className="text-gray-600">Try adjusting your search or filter</p>
               </div>
             )}
           </div>
         )}
 
-        {/* Content Manager Tab */}
-        {activeTab === 'content' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-lg">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-2xl font-black text-gray-900">Content Manager</h2>
-                  <p className="text-gray-600">Manage all uploaded content</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  {/* Content Type Filter */}
-                  <select
-                    value={selectedContentType}
-                    onChange={(e) => setSelectedContentType(e.target.value as any)}
-                    className="px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-700"
-                  >
-                    {contentTypes.map(type => (
-                      <option key={type.id} value={type.id}>
-                        {type.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+        {/* WITHDRAWALS TAB */}
+        {activeTab === 'withdrawals' && (
+          <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-lg">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-black text-gray-900">Withdrawal Requests</h2>
+                <p className="text-gray-600">Process user withdrawal requests manually</p>
               </div>
+              <button
+                onClick={fetchWithdrawals}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Refresh
+              </button>
+            </div>
 
-              {/* Content List */}
+            {loadingWithdrawals ? (
+              <div className="text-center py-12">
+                <Loader className="h-8 w-8 text-blue-600 animate-spin mx-auto mb-4" />
+                <p className="text-gray-600">Loading withdrawals...</p>
+              </div>
+            ) : withdrawals.length > 0 ? (
               <div className="space-y-4">
-                {loadingContent ? (
-                  <div className="text-center py-12">
-                    <Loader className="h-8 w-8 text-blue-600 animate-spin mx-auto mb-4" />
-                    <p className="text-gray-600">Loading content...</p>
-                  </div>
-                ) : contentItems.length > 0 ? (
-                  contentItems.map(item => (
-                    <div
-                      key={item.id}
-                      className="bg-gray-50 rounded-xl border border-gray-300 p-4 hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className={`p-2 rounded-lg ${
-                              item.type === 'job' ? 'bg-blue-100 text-blue-600' :
-                              item.type === 'internship' ? 'bg-orange-100 text-orange-600' :
-                              item.type === 'bursary' ? 'bg-green-100 text-green-600' :
-                              item.type === 'scholarship' ? 'bg-purple-100 text-purple-600' :
-                              item.type === 'hostel' ? 'bg-pink-100 text-pink-600' :
-                              'bg-gray-100 text-gray-600'
-                            }`}>
-                              {item.type === 'job' ? <Briefcase className="h-4 w-4" /> :
-                               item.type === 'internship' ? <BrainCircuit className="h-4 w-4" /> :
-                               item.type === 'bursary' ? <PiggyBank className="h-4 w-4" /> :
-                               item.type === 'scholarship' ? <Award className="h-4 w-4" /> :
-                               item.type === 'hostel' ? <Home className="h-4 w-4" /> :
-                               <Shield className="h-4 w-4" />}
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <h3 className="font-bold text-gray-900">{item.title}</h3>
-                                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                    item.status === 'active' || item.status === 'approved' ? 'bg-green-100 text-green-700' :
-                                    item.status === 'pending_approval' ? 'bg-yellow-100 text-yellow-700' :
-                                    item.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                                    item.status === 'draft' ? 'bg-gray-100 text-gray-700' :
-                                    'bg-blue-100 text-blue-700'
-                                  }`}>
-                                    {item.status}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  {/* Edit and Delete Buttons - ADDED HERE */}
-                                  <button
-                                    onClick={() => handleEdit(item)}
-                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"
-                                    title="Edit"
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(item)}
-                                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"
-                                    title="Delete"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              </div>
-                              <p className="text-gray-600 text-sm mt-1">{item.description}</p>
-                              <div className="flex flex-wrap gap-4 mt-3">
-                                {item.institution && (
-                                  <div className="flex items-center gap-1 text-sm text-gray-700">
-                                    <Building className="h-3 w-3" />
-                                    {item.institution}
-                                  </div>
-                                )}
-                                {item.location && (
-                                  <div className="flex items-center gap-1 text-sm text-gray-700">
-                                    <MapPin className="h-3 w-3" />
-                                    {item.location}
-                                  </div>
-                                )}
-                                {item.amount && (
-                                  <div className="flex items-center gap-1 text-sm text-gray-700">
-                                    <DollarSign className="h-3 w-3" />
-                                    {formatAmount(item.amount)}
-                                  </div>
-                                )}
-                                {item.deadline && (
-                                  <div className="flex items-center gap-1 text-sm text-red-600">
-                                    <Calendar className="h-3 w-3" />
-                                    Due: {formatDate(item.deadline)}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
+                {withdrawals.map(withdrawal => (
+                  <div key={withdrawal.id} className="border border-gray-200 rounded-xl p-4 hover:border-gray-300">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="font-bold text-gray-900">{withdrawal.userPhone}</div>
+                          <span className={`px-3 py-1 text-xs font-medium rounded-full ${
+                            withdrawal.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            withdrawal.status === 'approved' ? 'bg-green-100 text-green-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {withdrawal.status.toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          Amount: <span className="font-bold text-gray-900">{formatCurrency(withdrawal.amount)}</span>
+                          <span className="mx-2">•</span>
+                          Method: {withdrawal.method.toUpperCase()}
+                          <span className="mx-2">•</span>
+                          Account: {withdrawal.accountDetails}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          Requested: {formatDate(withdrawal.requestedAt)}
+                          {withdrawal.processedAt && (
+                            <>
+                              <span className="mx-2">•</span>
+                              Processed: {formatDate(withdrawal.processedAt)}
+                            </>
+                          )}
                         </div>
                       </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {withdrawal.status === 'pending' && (
+                          <button
+                            onClick={() => handleProcessWithdrawal(withdrawal.id)}
+                            className="px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700"
+                          >
+                            Mark as Processed
+                          </button>
+                        )}
+                        <button className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+                          <MoreVertical className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-300">
-                    <div className="bg-gradient-to-r from-blue-100 to-blue-200 p-4 rounded-2xl inline-block mb-4">
-                      <DatabaseIcon className="h-12 w-12 text-blue-600" />
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">No Content Found</h3>
-                    <p className="text-gray-600 mb-6">
-                      Upload some {contentTypes.find(t => t.id === selectedContentType)?.name.toLowerCase()} using the CSV Upload tab
-                    </p>
-                    <button
-                      onClick={() => setActiveTab('upload')}
-                      className="px-6 py-2 bg-gradient-to-r from-[#ff6b35] to-[#ffa500] text-white font-bold rounded-lg hover:opacity-90"
-                    >
-                      Go to CSV Upload
-                    </button>
                   </div>
-                )}
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-gray-50 rounded-xl">
+                <div className="bg-gradient-to-r from-gray-100 to-gray-200 p-4 rounded-2xl inline-block mb-4">
+                  <Wallet className="h-12 w-12 text-gray-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">No Withdrawal Requests</h3>
+                <p className="text-gray-600">No pending withdrawal requests at the moment</p>
+              </div>
+            )}
+            
+            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+              <div className="flex items-start gap-3">
+                <Info className="h-5 w-5 text-blue-600 flex-shrink-0" />
+                <div>
+                  <p className="text-sm text-blue-800">
+                    <strong>Note:</strong> Withdrawals are processed manually. Click "Mark as Processed" after completing the M-Pesa/Bank transfer, then update the user's balance accordingly.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Config Manager Tab */}
-        {activeTab === 'config' && (
+        {/* CAMPAIGNS TAB */}
+        {activeTab === 'campaigns' && (
           <div className="bg-white rounded-2xl border-2 border-gray-200 p-6 shadow-lg">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-2xl font-black text-gray-900">Config Manager</h2>
-                <p className="text-gray-600">No-code configuration interface</p>
+                <h2 className="text-2xl font-black text-gray-900">Campaign Management</h2>
+                <p className="text-gray-600">Upload and manage promotional campaigns</p>
               </div>
-              <button
-                onClick={saveAllConfig}
-                className="px-4 py-2 bg-gradient-to-r from-[#ff6b35] to-[#ffa500] text-white font-bold rounded-lg hover:opacity-90"
-              >
-                Save All Changes
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={copyTemplate}
+                  className="px-3 py-1.5 text-sm bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg font-medium"
+                >
+                  Copy Template
+                </button>
+                <button
+                  onClick={downloadTemplate}
+                  className="px-3 py-1.5 text-sm bg-green-50 text-green-600 hover:bg-green-100 rounded-lg font-medium"
+                >
+                  Download CSV
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-6">
-              {configSections.map(section => (
-                <div key={section.id} className="border border-gray-300 rounded-xl p-5">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
-                      {section.icon}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-gray-900">{section.title}</h3>
-                      <p className="text-sm text-gray-600">{section.description}</p>
-                    </div>
-                  </div>
+            {/* CSV Upload Area */}
+            <div className="mb-8">
+              <div className="mb-4">
+                <textarea
+                  value={csvData}
+                  onChange={(e) => setCsvData(e.target.value)}
+                  placeholder="Paste your campaign CSV data here (with headers)..."
+                  className="w-full h-64 px-4 py-3 bg-gray-50 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-[#ff6b35] focus:border-transparent font-mono text-sm"
+                  spellCheck={false}
+                />
+              </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {section.fields.map(field => (
-                      <div key={field.id}>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          {field.label}
-                          {field.helpText && (
-                            <span className="text-xs text-gray-500 ml-2">{field.helpText}</span>
-                          )}
-                        </label>
-                        
-                        {field.type === 'text' || field.type === 'number' ? (
-                          <input
-                            type={field.type}
-                            value={field.value}
-                            onChange={(e) => updateConfigField(section.id, field.id, e.target.value)}
-                            className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg"
-                            placeholder={field.placeholder}
-                          />
-                        ) : field.type === 'select' ? (
-                          <select
-                            value={field.value}
-                            onChange={(e) => updateConfigField(section.id, field.id, e.target.value)}
-                            className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg"
-                          >
-                            {field.options?.map(option => (
-                              <option key={option} value={option}>{option}</option>
-                            ))}
-                          </select>
-                        ) : field.type === 'textarea' ? (
-                          <textarea
-                            value={field.value}
-                            onChange={(e) => updateConfigField(section.id, field.id, e.target.value)}
-                            className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg"
-                            rows={3}
-                            placeholder={field.placeholder}
-                          />
-                        ) : field.type === 'toggle' ? (
-                          <button
-                            onClick={() => updateConfigField(section.id, field.id, !field.value)}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full ${
-                              field.value ? 'bg-green-500' : 'bg-gray-300'
-                            }`}
-                          >
-                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                              field.value ? 'translate-x-6' : 'translate-x-1'
-                            }`} />
-                          </button>
-                        ) : field.type === 'color' ? (
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="color"
-                              value={field.value}
-                              onChange={(e) => updateConfigField(section.id, field.id, e.target.value)}
-                              className="h-10 w-10 cursor-pointer"
-                            />
-                            <input
-                              type="text"
-                              value={field.value}
-                              onChange={(e) => updateConfigField(section.id, field.id, e.target.value)}
-                              className="flex-1 px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg font-mono"
-                            />
-                          </div>
-                        ) : null}
-                      </div>
-                    ))}
+              {/* Upload Button */}
+              <button
+                onClick={handleCsvUpload}
+                disabled={uploading || !csvData.trim()}
+                className="w-full py-4 bg-gradient-to-r from-[#ff6b35] to-[#ffa500] text-white font-bold rounded-xl hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg"
+              >
+                {uploading ? (
+                  <>
+                    <Loader className="h-5 w-5 animate-spin" />
+                    Uploading Campaigns...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-5 w-5" />
+                    Upload Campaigns
+                  </>
+                )}
+              </button>
+
+              {/* Upload Result */}
+              {uploadResult && (
+                <div className={`mt-6 p-4 rounded-xl ${
+                  uploadResult.success 
+                    ? 'bg-green-50 border border-green-200' 
+                    : 'bg-red-50 border border-red-200'
+                }`}>
+                  <div className="flex items-start gap-3">
+                    {uploadResult.success ? (
+                      <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+                    )}
+                    <div>
+                      <p className={`font-medium ${
+                        uploadResult.success ? 'text-green-800' : 'text-red-800'
+                      }`}>
+                        {uploadResult.message}
+                      </p>
+                      {uploadResult.count !== undefined && (
+                        <p className="text-sm text-green-700 mt-1">
+                          Successfully uploaded {uploadResult.count} campaigns
+                        </p>
+                      )}
+                      {uploadResult.error && (
+                        <p className="text-sm text-red-700 mt-1 font-mono">
+                          Error: {uploadResult.error}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
-              ))}
+              )}
+            </div>
+
+            {/* Campaigns List */}
+            <div className="mt-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Active Campaigns</h3>
+              {loadingCampaigns ? (
+                <div className="text-center py-8">
+                  <Loader className="h-6 w-6 text-blue-600 animate-spin mx-auto" />
+                </div>
+              ) : campaigns.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {campaigns.map(campaign => (
+                    <div key={campaign.id} className="border border-gray-200 rounded-xl p-4 hover:border-gray-300">
+                      <h4 className="font-bold text-gray-900">{campaign.title}</h4>
+                      <p className="text-sm text-gray-600 mt-1">{campaign.description}</p>
+                      <div className="flex items-center justify-between mt-3">
+                        <span className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
+                          {campaign.category}
+                        </span>
+                        <span className="text-xs text-gray-500">{campaign.company}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No campaigns uploaded yet.
+                </div>
+              )}
             </div>
           </div>
         )}
       </main>
 
-      {/* Edit Modal */}
-      {showEditModal && editingItem && (
+      {/* User Details Modal */}
+      {showUserDetails && selectedUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Edit Content</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-900">User Details</h3>
+              <button
+                onClick={() => setShowUserDetails(false)}
+                className="p-2 text-gray-500 hover:text-gray-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                <input
-                  type="text"
-                  value={editForm.title}
-                  onChange={(e) => setEditForm({...editForm, title: e.target.value})}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                <p className="text-gray-900 font-medium">{selectedUser.phone}</p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea
-                  value={editForm.description}
-                  onChange={(e) => setEditForm({...editForm, description: e.target.value})}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg"
-                  rows={3}
-                />
-              </div>
+              
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount (KES)</label>
-                  <input
-                    type="number"
-                    value={editForm.amount}
-                    onChange={(e) => setEditForm({...editForm, amount: e.target.value})}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                  <span className={`px-3 py-1 text-xs font-medium rounded-full ${getRoleColor(selectedUser.role)}`}>
+                    {selectedUser.role.toUpperCase()}
+                  </span>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                  <input
-                    type="text"
-                    value={editForm.location}
-                    onChange={(e) => setEditForm({...editForm, location: e.target.value})}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(selectedUser.status)}`}>
+                    {selectedUser.status.toUpperCase()}
+                  </span>
                 </div>
               </div>
+              
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Institution/Organization</label>
-                <input
-                  type="text"
-                  value={editForm.institution}
-                  onChange={(e) => setEditForm({...editForm, institution: e.target.value})}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Balance</label>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(selectedUser.balance || 0)}</p>
               </div>
+              
+              {selectedUser.totalEarnings && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Total Earnings</label>
+                  <p className="text-lg font-semibold text-gray-900">{formatCurrency(selectedUser.totalEarnings)}</p>
+                </div>
+              )}
+              
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Requirements (comma separated)</label>
-                <textarea
-                  value={editForm.requirements}
-                  onChange={(e) => setEditForm({...editForm, requirements: e.target.value})}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg"
-                  rows={2}
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Joined On</label>
+                <p className="text-gray-900">{formatDate(selectedUser.joinDate)}</p>
               </div>
+              
+              {selectedUser.referralCode && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Referral Code</label>
+                  <p className="text-gray-900 font-mono">{selectedUser.referralCode}</p>
+                </div>
+              )}
+              
+              {selectedUser.whatsappVerified && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <MessageCircle className="h-4 w-4 text-green-600" />
+                    <span className="text-sm font-medium text-green-800">WhatsApp Verified</span>
+                  </div>
+                </div>
+              )}
             </div>
-
+            
             <div className="mt-8 pt-6 border-t border-gray-200 flex gap-3">
               <button
-                onClick={() => {
-                  setShowEditModal(false);
-                  setEditingItem(null);
-                }}
+                onClick={() => setShowUserDetails(false)}
                 className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200"
               >
-                Cancel
+                Close
               </button>
               <button
-                onClick={handleSaveEdit}
-                className="flex-1 py-3 bg-gradient-to-r from-[#ff6b35] to-[#ffa500] text-white font-bold rounded-xl hover:opacity-90"
+                onClick={() => {
+                  const message = `User: ${selectedUser.phone}\nBalance: ${selectedUser.balance}\nRole: ${selectedUser.role}`;
+                  navigator.clipboard.writeText(message);
+                  alert('User details copied to clipboard!');
+                }}
+                className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700"
               >
-                Save Changes
+                Copy Details
               </button>
             </div>
           </div>
@@ -1042,21 +1131,40 @@ export default function AdminDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <div className="flex items-center justify-center gap-2 mb-6">
             <div className="bg-gradient-to-r from-[#ff6b35] to-[#ffa500] p-2 rounded-lg">
-              <ShieldCheck className="h-6 w-6 text-white" />
+              <Shield className="h-6 w-6 text-white" />
             </div>
             <span className="text-xl font-black bg-gradient-to-r from-[#ff6b35] to-[#ffa500] bg-clip-text text-transparent">
               Veritas CyberHub Admin
             </span>
           </div>
-          <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
-            Complete content management system with bulk upload, configuration, and real-time editing.
-          </p>
           <div className="text-sm text-gray-500">
-            <p>Logged in as: {phone} | Role: {role}</p>
-            <p className="mt-2">Total Content Items: {contentItems.length} | Last Refresh: {refreshing ? 'Refreshing...' : 'Just now'}</p>
+            <p>Logged in as: {phone} | Role: {role} | Total Users: {stats.totalUsers}</p>
+            <p className="mt-2">Total System Balance: {formatCurrency(stats.totalBalance)} | WhatsApp Pending: {stats.whatsappPending}</p>
           </div>
         </div>
       </footer>
     </div>
   );
+}
+
+// Helper functions for CSV operations
+function copyTemplate() {
+  const template = `title,description,category,company,startDate,endDate,discount,contactEmail
+Student Welcome Campaign,Special offers for new students,student-offer,Veritas CyberHub,2024-01-01,2024-03-31,15%,offers@veritascyberhub.com`;
+  navigator.clipboard.writeText(template);
+  alert('Campaign CSV template copied to clipboard!');
+}
+
+function downloadTemplate() {
+  const template = `title,description,category,company,startDate,endDate,discount,contactEmail
+Student Welcome Campaign,Special offers for new students,student-offer,Veritas CyberHub,2024-01-01,2024-03-31,15%,offers@veritascyberhub.com`;
+  const blob = new Blob([template], { type: 'text/csv' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'campaigns-template.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
 }

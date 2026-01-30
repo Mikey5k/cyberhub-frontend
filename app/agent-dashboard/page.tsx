@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -29,11 +29,12 @@ interface Task {
   assignedWorkerPhone?: string;
   customerPhone?: string;
   createdAt?: string;
+  adminContact?: string;
 }
 
 const WORKER_COMMISSION_RATE = 0.30;
+const ADMIN_WHATSAPP = "254708949580";
 
-// API functions
 async function getAgentTasks(phone: string): Promise<Task[]> {
   try {
     const response = await fetch(`/api/tasks?phone=${encodeURIComponent(phone)}&role=worker`);
@@ -43,7 +44,6 @@ async function getAgentTasks(phone: string): Promise<Task[]> {
     
     const data = await response.json();
     if (data.success && data.tasks) {
-      // Map API tasks to our interface
       return data.tasks.map((task: any) => ({
         id: task.id,
         title: task.title || 'Untitled Task',
@@ -61,7 +61,8 @@ async function getAgentTasks(phone: string): Promise<Task[]> {
         workerPhone: task.assignedWorkerPhone,
         assignedWorkerPhone: task.assignedWorkerPhone,
         customerPhone: task.customerPhone,
-        createdAt: task.createdAt
+        createdAt: task.createdAt,
+        adminContact: task.adminContact || ADMIN_WHATSAPP
       }));
     }
     return [];
@@ -97,7 +98,7 @@ async function updateTask(taskId: string, updates: any): Promise<boolean> {
   }
 }
 
-async function assignTask(taskId: string, workerPhone: string): Promise<boolean> {
+async function assignTask(taskId: string, workerPhone: string, workerWhatsapp?: string): Promise<boolean> {
   try {
     const response = await fetch('/api/tasks', {
       method: 'POST',
@@ -107,7 +108,9 @@ async function assignTask(taskId: string, workerPhone: string): Promise<boolean>
       body: JSON.stringify({
         operation: 'assign',
         taskId,
-        workerPhone
+        workerPhone,
+        workerWhatsapp: workerWhatsapp || workerPhone,
+        status: 'assigned'
       }),
     });
     
@@ -160,7 +163,6 @@ export default function AgentDashboard() {
       const data = await getAgentTasks(phone!);
       setTasks(data);
 
-      // Calculate stats
       const completed = data.filter((t: Task) => t.status === "completed");
       const pending = data.filter((t: Task) => 
         t.status === "assigned" || t.status === "in_progress"
@@ -193,10 +195,14 @@ export default function AgentDashboard() {
       let success = false;
       
       if (newStatus === "assigned" || newStatus === "in_progress") {
-        // Assign task with worker's phone
-        success = await assignTask(taskId, phone!);
+        success = await assignTask(taskId, phone!, phone);
+        if (success) {
+          const task = tasks.find(t => t.id === taskId);
+          if (task) {
+            console.log(`Worker ${phone} accepted task ${taskId}. Their WhatsApp will be shown to client.`);
+          }
+        }
       } else {
-        // Update task status
         const apiStatus = newStatus === 'in_progress' ? 'in-progress' : newStatus;
         success = await updateTask(taskId, { status: apiStatus });
       }
@@ -223,6 +229,29 @@ export default function AgentDashboard() {
       setIsModalOpen(true);
       setStatusUpdate("assigned");
     }
+  };
+
+  const getClientWhatsappLink = (task: Task) => {
+    const whatsappNumber = task.assignedWorkerPhone || task.adminContact || ADMIN_WHATSAPP;
+    return `https://wa.me/${whatsappNumber}`;
+  };
+
+  const handleAskQuestions = (task: Task) => {
+    const whatsappNumber = task.assignedWorkerPhone || ADMIN_WHATSAPP;
+    const message = `Hello, I'm interested in the "${task.title}" service. Can you provide more details?`;
+    window.open(`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  const handleUpdateClient = (task: Task) => {
+    const whatsappNumber = task.assignedWorkerPhone || ADMIN_WHATSAPP;
+    const message = `Hi, I'm working on your "${task.title}" service. Just wanted to give you an update.`;
+    window.open(`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  const handleFollowUp = (task: Task) => {
+    const whatsappNumber = task.assignedWorkerPhone || ADMIN_WHATSAPP;
+    const message = `Hello, regarding your completed "${task.title}" service. Hope everything was satisfactory!`;
+    window.open(`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   const getStatusColor = (status: Task["status"]) => {
@@ -330,6 +359,7 @@ export default function AgentDashboard() {
                 <div>
                   <p className="font-semibold text-gray-900">Agent</p>
                   <p className="text-xs text-gray-600">{phone}</p>
+                  <p className="text-xs text-green-600 font-medium">WhatsApp: {phone}</p>
                 </div>
               </div>
             </div>
@@ -492,6 +522,10 @@ export default function AgentDashboard() {
                             <div className="h-2 w-2 bg-green-500 rounded-full"></div>
                             <span className="text-sm text-gray-700">Earnings: {formatCurrency(task.price * WORKER_COMMISSION_RATE)}</span>
                           </div>
+                          <div className="flex items-center gap-2">
+                            <div className="h-2 w-2 bg-purple-500 rounded-full"></div>
+                            <span className="text-sm text-gray-700">Client contacts: Admin</span>
+                          </div>
                         </div>
                         <button
                           onClick={() => handleTakeJob(task.id)}
@@ -533,7 +567,9 @@ export default function AgentDashboard() {
                           </div>
                           <div>
                             <p className="font-semibold text-gray-900">{task.title}</p>
-                            <p className="text-sm text-gray-600">Due soon</p>
+                            <p className="text-sm text-gray-600">
+                              Client contacts: {task.assignedWorkerPhone ? 'You' : 'Admin'}
+                            </p>
                           </div>
                         </div>
                         <button
@@ -574,6 +610,9 @@ export default function AgentDashboard() {
                           <div>
                             <p className="font-semibold text-gray-900">{task.title}</p>
                             <p className="text-sm text-gray-600">Earned: {formatCurrency(task.price * WORKER_COMMISSION_RATE)}</p>
+                            <p className="text-xs text-gray-500">
+                              WhatsApp: {task.assignedWorkerPhone ? 'You' : 'Admin'}
+                            </p>
                           </div>
                         </div>
                         <span className="px-3 py-1 bg-green-100 text-green-700 text-sm font-semibold rounded-full">
@@ -647,6 +686,16 @@ export default function AgentDashboard() {
                               {formatCurrency(task.price * WORKER_COMMISSION_RATE)}
                             </span>
                           </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="h-3 w-3 bg-blue-500 rounded-full"></div>
+                              <span className="text-sm text-gray-700">Client Contacts</span>
+                            </div>
+                            <span className="text-sm font-medium text-blue-600">
+                              {task.assignedWorkerPhone ? 'Assigned Worker' : 'Admin (until assigned)'}
+                            </span>
+                          </div>
                         </div>
 
                         <div className="space-y-3">
@@ -657,10 +706,7 @@ export default function AgentDashboard() {
                             Accept Job
                           </button>
                           <button
-                            onClick={() => {
-                              const message = `Hello, I'm interested in the "${task.title}" service. Can you provide more details?`;
-                              window.open(`https://wa.me/${task.clientPhone}?text=${encodeURIComponent(message)}`, '_blank');
-                            }}
+                            onClick={() => handleAskQuestions(task)}
                             className="w-full py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50"
                           >
                             <MessageCircle className="h-4 w-4 inline mr-2" />
@@ -718,6 +764,9 @@ export default function AgentDashboard() {
                               <div>
                                 <h3 className="text-xl font-bold text-gray-900">{task.title}</h3>
                                 <p className="text-gray-600">{task.description}</p>
+                                <p className="text-sm text-blue-600 mt-1">
+                                  <strong>WhatsApp Contact:</strong> {task.assignedWorkerPhone ? 'You (Client messages you directly)' : 'Admin'}
+                                </p>
                               </div>
                             </div>
                             
@@ -752,10 +801,7 @@ export default function AgentDashboard() {
                         <div className="flex items-center justify-between pt-6 border-t border-gray-200">
                           <div className="flex items-center gap-4">
                             <button
-                              onClick={() => {
-                                const message = `Hi, I'm working on your "${task.title}" service. Just wanted to give you an update.`;
-                                window.open(`https://wa.me/${task.clientPhone}?text=${encodeURIComponent(message)}`, '_blank');
-                              }}
+                              onClick={() => handleUpdateClient(task)}
                               className="px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold rounded-xl hover:opacity-90"
                             >
                               <MessageCircle className="h-4 w-4 inline mr-2" />
@@ -826,6 +872,9 @@ export default function AgentDashboard() {
                             <div>
                               <h3 className="text-xl font-bold text-gray-900">{task.title}</h3>
                               <p className="text-gray-600">Completed on {task.completedAt ? new Date(task.completedAt).toLocaleDateString() : 'N/A'}</p>
+                              <p className="text-sm text-blue-600 mt-1">
+                                WhatsApp: {task.assignedWorkerPhone ? 'You handled communication' : 'Admin handled'}
+                              </p>
                             </div>
                           </div>
                           <div className="text-right">
@@ -852,10 +901,7 @@ export default function AgentDashboard() {
                         <div className="flex items-center justify-between pt-6 border-t border-gray-200">
                           <div className="flex items-center gap-4">
                             <button
-                              onClick={() => {
-                                const message = `Hello, regarding your completed "${task.title}" service. Hope everything was satisfactory!`;
-                                window.open(`https://wa.me/${task.clientPhone}?text=${encodeURIComponent(message)}`, '_blank');
-                              }}
+                              onClick={() => handleFollowUp(task)}
                               className="px-6 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50"
                             >
                               Follow Up
@@ -960,6 +1006,7 @@ export default function AgentDashboard() {
                           <div>
                             <p className="font-bold text-gray-900">{task.title}</p>
                             <p className="text-sm text-gray-600">Completed on {task.completedAt ? new Date(task.completedAt).toLocaleDateString() : 'N/A'}</p>
+                            <p className="text-xs text-blue-600">WhatsApp: {task.assignedWorkerPhone ? 'Direct' : 'Admin'}</p>
                           </div>
                         </div>
                         <div className="text-right">
@@ -982,9 +1029,18 @@ export default function AgentDashboard() {
             <div className="p-6 border-b border-gray-200">
               <h3 className="text-xl font-bold text-gray-900">Accept Job</h3>
               <p className="text-gray-600 mt-1">You are about to accept: {selectedTask.title}</p>
-              <p className="text-sm text-gray-500 mt-2">
-                Your phone number ({phone}) will be shared with the client for WhatsApp communication.
-              </p>
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <MessageCircle className="h-4 w-4 text-blue-600 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-blue-800">WhatsApp Assignment</p>
+                    <p className="text-xs text-blue-700 mt-1">
+                      Once you accept, the client will see <strong>your WhatsApp number ({phone})</strong> 
+                      and will message you directly for this service.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
             <div className="p-6">
               <div className="space-y-4">

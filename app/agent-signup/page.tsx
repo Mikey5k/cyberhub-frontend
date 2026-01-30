@@ -7,7 +7,6 @@ import {
   Users, Banknote, Calendar, ArrowRight, Loader,
   AlertCircle, Copy, Star
 } from 'lucide-react';
-import { createUser } from '@/lib/api';
 
 // Content component that uses useSearchParams
 function AgentSignupContent() {
@@ -54,8 +53,15 @@ function AgentSignupContent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phone.startsWith('+254')) {
-      setError('Please use a valid Kenyan phone number starting with +254');
+    
+    // Validate phone number
+    if (!phone.startsWith('+254') || phone.length !== 13) {
+      setError('Please use a valid Kenyan phone number starting with +254 (e.g., +254712345678)');
+      return;
+    }
+    
+    if (!name.trim()) {
+      setError('Please enter your full name');
       return;
     }
 
@@ -63,26 +69,47 @@ function AgentSignupContent() {
     setError('');
 
     try {
-      // Create agent user with manager link using our API utility
-      const result = await createUser(phone, 'worker', name, managerPhone || undefined);
+      // Create agent user with PENDING status (requires admin approval)
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phone: phone,
+          name: name.trim(),
+          role: 'worker',
+          status: 'pending', // IMPORTANT: Set as pending for admin approval
+          referredBy: managerPhone || '',
+          balance: 0,
+          // Generate email from phone (required by API)
+          email: `${phone.replace('+', '')}@veritascyberhub.com`,
+          // Generate password (users will login with phone)
+          password: `agent${Date.now().toString().slice(-6)}`
+        })
+      });
+      
+      const result = await response.json();
       
       if (result.success) {
-        // Manager-agent relationship is already handled in createUser function
-        // through the managerPhone parameter in the API
+        // Store temporary session info
+        localStorage.setItem('cyberhub_phone', phone);
+        localStorage.setItem('cyberhub_role', 'pending_worker');
+        sessionStorage.setItem('cyberhub_phone', phone);
+        sessionStorage.setItem('cyberhub_role', 'pending_worker');
         
         setSuccess(true);
         
-        // Auto login after 2 seconds
+        // Auto redirect after 3 seconds
         setTimeout(() => {
-          localStorage.setItem('cyberhub_phone', phone);
-          localStorage.setItem('cyberhub_role', 'worker');
-          sessionStorage.setItem('cyberhub_phone', phone);
-          sessionStorage.setItem('cyberhub_role', 'worker');
-          router.push('/agent-dashboard');
-        }, 2000);
+          router.push('/agent-signup-success');
+        }, 3000);
+      } else {
+        setError(result.error || 'Registration failed. Please try again.');
       }
     } catch (err: any) {
-      setError(err.message || 'Registration failed. Please try again.');
+      console.error('Registration error:', err);
+      setError('Registration failed. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -120,10 +147,18 @@ function AgentSignupContent() {
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-2xl border-2 border-gray-200 p-8 text-center">
           <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-black text-gray-900 mb-2">Welcome to Veritas!</h2>
-          <p className="text-gray-600 mb-4">Your agent account has been created successfully.</p>
+          <h2 className="text-2xl font-black text-gray-900 mb-2">Application Submitted!</h2>
+          <p className="text-gray-600 mb-4">Your agent application has been received successfully.</p>
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-4">
+            <AlertCircle className="h-5 w-5 text-yellow-600 inline mr-2" />
+            <span className="text-yellow-800 font-medium">Status: Pending Approval</span>
+            <p className="text-sm text-yellow-700 mt-2">
+              Your application is under review. An admin will approve it within 24 hours.
+              You will receive a WhatsApp message when approved.
+            </p>
+          </div>
           <p className="text-gray-600 mb-2">You are now linked to manager: {managerInfo?.name}</p>
-          <p className="text-gray-600 mb-6">You will be redirected to your dashboard shortly.</p>
+          <p className="text-gray-600 mb-6">You will be redirected to the success page shortly.</p>
           <Loader className="h-8 w-8 animate-spin text-[#ff6b35] mx-auto" />
         </div>
       </div>
@@ -178,6 +213,17 @@ function AgentSignupContent() {
                 </div>
               </div>
             )}
+
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertCircle className="h-4 w-4 text-blue-600" />
+                <span className="text-sm font-medium text-blue-700">Important Notice</span>
+              </div>
+              <p className="text-sm text-blue-800">
+                Your agent application requires admin approval. You will receive a WhatsApp message 
+                within 24 hours when your account is activated. You cannot access the dashboard until approved.
+              </p>
+            </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
@@ -236,12 +282,12 @@ function AgentSignupContent() {
                 {loading ? (
                   <div className="flex items-center justify-center gap-3">
                     <Loader className="h-5 w-5 animate-spin" />
-                    Creating Account...
+                    Submitting Application...
                   </div>
                 ) : (
                   <div className="flex items-center justify-center gap-3">
                     <UserPlus className="h-5 w-5" />
-                    Become an Agent
+                    Submit Agent Application
                   </div>
                 )}
               </button>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import NavBar from "../src/components/NavBar";
+import Provider from "./provider";
 
 export const metadata: Metadata = {
   title: "Veritas CyberHub",
@@ -18,9 +19,11 @@ export default function RootLayout({
         className="font-sans antialiased subpixel-antialiased font-medium tracking-tight relative"
         suppressHydrationWarning
       >
-        {/* Navigation Bar - shows on all pages except landing page */}
-        <NavBar />
-        {children}
+        <Provider>
+          {/* Navigation Bar - shows on all pages except landing page */}
+          <NavBar />
+          {children}
+        </Provider>
       </body>
     </html>
   );

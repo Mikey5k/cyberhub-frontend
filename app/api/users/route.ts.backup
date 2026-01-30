@@ -69,40 +69,7 @@ function convertFirestoreUser(doc: any): any {
     else if (field.integerValue !== undefined) user[key] = Number(field.integerValue);
     else if (field.booleanValue !== undefined) user[key] = field.booleanValue;
     else if (field.timestampValue !== undefined) user[key] = field.timestampValue;
-    else if (field.doubleValue !== undefined) user[key] = Number(field.doubleValue);
-    else if (field.arrayValue?.values) {
-      user[key] = field.arrayValue.values.map((val: any) => {
-        if (val.mapValue?.fields) {
-          // Handle nested objects (like transactions or withdrawal requests)
-          const nestedObj: any = {};
-          Object.keys(val.mapValue.fields).forEach(nestedKey => {
-            const nestedField = val.mapValue.fields[nestedKey];
-            if (nestedField.stringValue !== undefined) nestedObj[nestedKey] = nestedField.stringValue;
-            else if (nestedField.integerValue !== undefined) nestedObj[nestedKey] = Number(nestedField.integerValue);
-            else if (nestedField.doubleValue !== undefined) nestedObj[nestedKey] = Number(nestedField.doubleValue);
-            else if (nestedField.booleanValue !== undefined) nestedObj[nestedKey] = nestedField.booleanValue;
-          });
-          return nestedObj;
-        } else if (val.stringValue !== undefined) {
-          return val.stringValue;
-        } else if (val.integerValue !== undefined) {
-          return Number(val.integerValue);
-        } else if (val.doubleValue !== undefined) {
-          return Number(val.doubleValue);
-        }
-        return val;
-      });
-    }
   });
-  
-  // Ensure default values for admin dashboard
-  if (!user.role) user.role = 'user';
-  if (!user.status) user.status = 'active';
-  if (user.balance === undefined) user.balance = 0;
-  if (user.totalEarnings === undefined) user.totalEarnings = 0;
-  if (!user.joinDate) user.joinDate = user.createdAt || new Date().toISOString();
-  if (!user.transactions) user.transactions = [];
-  if (!user.withdrawalRequests) user.withdrawalRequests = [];
   
   return user;
 }
@@ -128,112 +95,22 @@ function convertToFirestoreFields(data: any): any {
       }
     } else if (typeof value === 'boolean') {
       fields[key] = { booleanValue: value };
-    } else if (Array.isArray(value)) {
-      fields[key] = {
-        arrayValue: {
-          values: value.map(item => {
-            if (typeof item === 'object' && item !== null) {
-              // Handle nested objects (transactions, withdrawal requests)
-              const mapFields: any = {};
-              Object.keys(item).forEach(itemKey => {
-                const itemValue = item[itemKey];
-                if (typeof itemValue === 'string') {
-                  mapFields[itemKey] = { stringValue: itemValue };
-                } else if (typeof itemValue === 'number') {
-                  if (Number.isInteger(itemValue)) {
-                    mapFields[itemKey] = { integerValue: itemValue.toString() };
-                  } else {
-                    mapFields[itemKey] = { doubleValue: itemValue };
-                  }
-                } else if (typeof itemValue === 'boolean') {
-                  mapFields[itemKey] = { booleanValue: itemValue };
-                }
-              });
-              return { mapValue: { fields: mapFields } };
-            } else if (typeof item === 'string') {
-              return { stringValue: item };
-            } else if (typeof item === 'number') {
-              if (Number.isInteger(item)) {
-                return { integerValue: item.toString() };
-              }
-              return { doubleValue: item };
-            }
-            return { stringValue: String(item) };
-          })
-        }
-      };
     }
   });
   
   return fields;
 }
 
-// GET - Get user by email or ID, or get all users for admin
+// GET - Get user by email or ID
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const email = searchParams.get('email');
     const id = searchParams.get('id');
-    const getAll = searchParams.get('getAll');
-    const adminKey = searchParams.get('adminKey');
 
-    // ADMIN: Get all users (for admin dashboard)
-    if (getAll === 'true' && adminKey === 'veritas-admin-2024') {
-      try {
-        const response = await firestoreRequest('/users');
-        if (response && response.documents) {
-          const allUsers = response.documents.map(convertFirestoreUser);
-          
-          // Remove password hashes and add default values
-          const usersWithoutPasswords = allUsers.map((user: any) => {
-            const { passwordHash, ...userWithoutPassword } = user;
-            
-            // Ensure all required fields for admin dashboard
-            return {
-              id: userWithoutPassword.id,
-              phone: userWithoutPassword.phone || '',
-              role: userWithoutPassword.role || 'user',
-              name: userWithoutPassword.name || '',
-              email: userWithoutPassword.email || '',
-              balance: userWithoutPassword.balance || 0,
-              totalEarnings: userWithoutPassword.totalEarnings || 0,
-              status: userWithoutPassword.status || 'active',
-              referralCode: userWithoutPassword.referralCode || '',
-              referredBy: userWithoutPassword.referredBy || '',
-              joinDate: userWithoutPassword.joinDate || userWithoutPassword.createdAt || new Date().toISOString(),
-              lastActive: userWithoutPassword.lastActive || '',
-              transactions: userWithoutPassword.transactions || [],
-              withdrawalRequests: userWithoutPassword.withdrawalRequests || []
-            };
-          });
-          
-          return NextResponse.json({
-            success: true,
-            data: usersWithoutPasswords,
-            count: usersWithoutPasswords.length
-          });
-        } else {
-          return NextResponse.json({
-            success: true,
-            data: [],
-            count: 0
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching all users:', error);
-        return NextResponse.json({
-          success: true,
-          data: [],
-          count: 0,
-          message: 'No users found or collection empty'
-        });
-      }
-    }
-
-    // ORIGINAL: Get single user by email or ID
     if (!email && !id) {
       return NextResponse.json(
-        { success: false, error: 'Email or ID parameter required. Use getAll=true&adminKey=veritas-admin-2024 for all users.' },
+        { success: false, error: 'Email or ID parameter required' },
         { status: 400 }
       );
     }
@@ -253,7 +130,7 @@ export async function GET(request: NextRequest) {
     }
     
     if (!user && email) {
-      // Search user by email
+      // Search user by email (Firestore doesn't support queries well in REST API, so we fetch all and filter)
       try {
         const response = await firestoreRequest('/users');
         if (response && response.documents) {
@@ -281,7 +158,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error in users API:', error);
+    console.error('Error fetching user:', error);
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }
@@ -293,7 +170,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password, name, phone, role = 'user', status = 'active', balance = 0, referredBy = '' } = body;
+    const { email, password, name, phone, role = 'user' } = body;
 
     // Validation
     if (!email || !password || !name) {
@@ -334,17 +211,8 @@ export async function POST(request: NextRequest) {
       name,
       phone: phone || '',
       role,
-      balance: Number(balance) || 0,
-      totalEarnings: 0,
-      status: status || 'active',
-      referralCode: '',
-      referredBy: referredBy || '',
       createdAt: now,
-      updatedAt: now,
-      joinDate: now,
-      lastActive: '',
-      transactions: [],
-      withdrawalRequests: []
+      updatedAt: now
     };
 
     const firestoreData = {
@@ -375,61 +243,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH - Login user or update user status (for admin dashboard)
+// PATCH - Login user (email/password)
 export async function PATCH(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const id = searchParams.get('id');
     const body = await request.json();
-    
-    // ADMIN: Update user status (from admin dashboard)
-    if (id) {
-      // Get existing user data first
-      let existingUser;
-      try {
-        const response = await firestoreRequest(`/users/${id}`);
-        if (response && response.fields) {
-          existingUser = convertFirestoreUser(response);
-        }
-      } catch (error) {
-        return NextResponse.json(
-          { success: false, error: 'User not found' },
-          { status: 404 }
-        );
-      }
-
-      // Merge existing data with updates
-      const updateData: any = {
-        ...existingUser, // Preserve all existing fields
-        ...body, // Apply updates
-        updatedAt: new Date().toISOString()
-      };
-
-      // Remove Firestore internal fields
-      delete updateData.id;
-      delete updateData.name;
-      delete updateData.fields;
-      delete updateData.passwordHash;
-
-      // Ensure numeric fields are numbers
-      if (updateData.balance !== undefined) updateData.balance = Number(updateData.balance);
-      if (updateData.totalEarnings !== undefined) updateData.totalEarnings = Number(updateData.totalEarnings);
-
-      console.log('Updating user with merged data:', updateData);
-
-      const firestoreData = {
-        fields: convertToFirestoreFields(updateData)
-      };
-
-      await firestoreRequest(`/users/${id}`, 'PATCH', firestoreData);
-
-      return NextResponse.json({
-        success: true,
-        message: 'User updated successfully'
-      });
-    }
-    
-    // ORIGINAL: Login user (email/password)
     const { email, password } = body;
 
     if (!email || !password) {
@@ -470,25 +287,6 @@ export async function PATCH(request: NextRequest) {
     // Generate JWT token
     const token = generateToken(user.id, user.email, user.role);
 
-    // Update last active - preserve all existing fields
-    const updateData = {
-      ...user,
-      lastActive: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    
-    // Remove Firestore internal fields
-    delete updateData.id;
-    delete updateData.name;
-    delete updateData.fields;
-    delete updateData.passwordHash;
-    
-    const firestoreUpdate = {
-      fields: convertToFirestoreFields(updateData)
-    };
-    
-    await firestoreRequest(`/users/${user.id}`, 'PATCH', firestoreUpdate);
-
     // Don't return password hash
     const { passwordHash, ...userWithoutPassword } = user;
 
@@ -500,7 +298,7 @@ export async function PATCH(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error in PATCH request:', error);
+    console.error('Error logging in:', error);
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 }
@@ -508,11 +306,11 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-// PUT - Update user profile
+// PUT - Update user (optional for now)
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { id, name, phone, balance, totalEarnings } = body;
+    const { id, name, phone } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -521,13 +319,9 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Get existing user data first
-    let existingUser;
+    // Check if user exists
     try {
-      const response = await firestoreRequest(`/users/${id}`);
-      if (response && response.fields) {
-        existingUser = convertFirestoreUser(response);
-      }
+      await firestoreRequest(`/users/${id}`);
     } catch (error) {
       return NextResponse.json(
         { success: false, error: 'User not found' },
@@ -535,22 +329,13 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Merge existing data with updates
+    // Update user data
     const updateData: any = {
-      ...existingUser, // Preserve all existing fields
       updatedAt: new Date().toISOString()
     };
 
     if (name) updateData.name = name;
     if (phone !== undefined) updateData.phone = phone;
-    if (balance !== undefined) updateData.balance = Number(balance);
-    if (totalEarnings !== undefined) updateData.totalEarnings = Number(totalEarnings);
-
-    // Remove Firestore internal fields
-    delete updateData.id;
-    delete updateData.name;
-    delete updateData.fields;
-    delete updateData.passwordHash;
 
     const firestoreData = {
       fields: convertToFirestoreFields(updateData)

@@ -1,0 +1,19 @@
+title,description,category,type,location,institution,amount,requirements,contact,processingTime
+National ID Application,Apply for first-time national ID,ID Card,government,Nairobi,National Registration Bureau,1000,"Birth certificate, parent IDs, school certificate",nrb@government.go.ke,2-3 weeks
+ID Replacement,Replace lost or damaged ID card,ID Card,government,Nairobi,National Registration Bureau,1000,"Copy of old ID, police abstract",nrb@government.go.ke,1-2 weeks
+Passport Application,Apply for Kenyan passport,Passport,government,Nairobi,Immigration Department,7500,"Birth certificate, ID copies, Form 19",immigration@government.go.ke,4-6 weeks
+KRA PIN Registration,Register for tax identification number,KRA PIN,government,Online,Kenya Revenue Authority,0,"National ID details",kra@government.go.ke,1-2 days
+Online Tax Filing,File annual tax returns online,Tax Filing,government,Online,Kenya Revenue Authority,0,"KRA PIN, iTax password, financial records",kra@government.go.ke,Immediate
+Tax Compliance Certificate,Get tax compliance certificate,Tax Certificate,government,Online,Kenya Revenue Authority,0,"Compliance with tax obligations",kra@government.go.ke,2-3 days
+Police Clearance,Get police clearance certificate,Police Clearance,government,Nairobi,Directorate of Criminal Investigations,1000,"National ID, fingerprint form",dci@government.go.ke,2-3 weeks
+Driving License Renewal,Renew your driving license,Driving License,government,Nairobi,NTSA,3000,"eCitizen account, KRA PIN, valid ID",ntsa@government.go.ke,2-3 weeks
+Vehicle Registration,Register motor vehicle,Vehicle Registration,government,Nairobi,NTSA,15000,"Import documents, KRA PIN, ID",ntsa@government.go.ke,1-2 weeks
+Business Registration,Register business name,Business Registration,government,Nairobi,Business Registration Service,5000,"Business name, IDs, KRA PINs",brs@government.go.ke,1-2 weeks
+HELB Application,Apply for student loan,Student Loan,government,Nationwide,HELB,0,"National ID, KRA PIN, admission letter",helb@government.go.ke,4-6 weeks
+NHIF Registration,Register for health insurance,NHIF Registration,government,Nationwide,NHIF,500,"National ID, passport photos, KRA PIN",nhif@government.go.ke,1 week
+NSSF Registration,Register for social security,NSSF Registration,government,Nationwide,NSSF,0,"National ID, KRA PIN, employer details",nssf@government.go.ke,3-5 days
+KUCCPS Application,Apply for university placement,KUCCPS Application,government,Online,KUCCPS,0,"KCSE index number, KRA PIN",kuccps@government.go.ke,2-3 months
+Land Search Services,Official land search,Land Search,government,Nairobi,Ministry of Lands,2000,"Title deed number, ID copy",lands@government.go.ke,1-2 weeks
+Marriage Registration,Register marriage,Marriage Registration,government,Nairobi,Civil Registration,3000,"IDs, passport photos, notice receipt",crs@government.go.ke,2-3 weeks
+Work Permit Application,Apply for work permit,Work Permit,government,Nairobi,Immigration Department,10000,"Passport, police clearance, job contract",immigration@government.go.ke,6-8 weeks
+Online Services Portal,Access all e-citizen services,E-Citizen,government,Online,eCitizen,0,"National ID, email, phone number",support@ecitizen.go.ke,24/7

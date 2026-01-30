@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Papa from 'papaparse';
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 // Firestore REST API helper
 const FIRESTORE_URL = `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents`;
@@ -137,47 +137,82 @@ export async function GET(request: NextRequest) {
   try {
     console.log('Jobs API: GET request received');
     const searchParams = request.nextUrl.searchParams;
-    const contentType = searchParams.get('contentType') || 'job';
+    const contentType = searchParams.get('contentType') || 'all';
     const status = searchParams.get('status');
     const approved = searchParams.get('approved');
     const phone = searchParams.get('phone');
     const role = searchParams.get('role');
+    const serviceId = searchParams.get('serviceId');
+    const customerPhone = searchParams.get('customerPhone');
+    const id = searchParams.get('id');
     
     console.log('Query params:', {
       contentType,
       status,
       approved,
       phone,
-      role
+      role,
+      serviceId,
+      customerPhone,
+      id
     });
 
     // Get all jobs from Firestore
-    const response = await firestoreRequest('/jobs');
     let jobs: any[] = [];
-
-    if (response && response.documents) {
-      jobs = response.documents.map(convertFirestoreDoc);
-      
-      // Apply filters in memory (since Firestore REST doesn't support complex queries easily)
-      if (contentType && contentType !== 'all') {
-        jobs = jobs.filter(job => job.contentType === contentType);
+    
+    try {
+      const response = await firestoreRequest('/jobs');
+      if (response && response.documents) {
+        jobs = response.documents.map(convertFirestoreDoc);
       }
-      
-      if (status) {
-        jobs = jobs.filter(job => job.status === status);
-      }
-      
-      if (approved) {
-        jobs = jobs.filter(job => job.approved === (approved === 'true'));
-      }
-      
-      // For user: show only approved
-      if (role === 'user' || (!role && !phone)) {
-        jobs = jobs.filter(job => job.approved === true);
-      }
+    } catch (error) {
+      console.error('Error fetching jobs from Firestore:', error);
+      // Return empty array instead of error for better UX
     }
 
-    console.log(`Found ${jobs.length} jobs with contentType: ${contentType}`);
+    // Apply filters in memory
+    if (contentType && contentType !== 'all') {
+      jobs = jobs.filter(job => job.contentType === contentType);
+    }
+    
+    if (status) {
+      jobs = jobs.filter(job => job.status === status);
+    }
+    
+    if (approved) {
+      jobs = jobs.filter(job => job.approved === (approved === 'true'));
+    }
+    
+    if (serviceId) {
+      jobs = jobs.filter(job => job.serviceId === serviceId);
+    }
+    
+    if (customerPhone) {
+      jobs = jobs.filter(job => job.customerPhone === customerPhone);
+    }
+    
+    if (id) {
+      jobs = jobs.filter(job => job.id === id);
+      // If filtering by ID and found, return single object
+      if (jobs.length === 1) {
+        return NextResponse.json({
+          success: true,
+          data: jobs[0]
+        });
+      } else if (jobs.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'Job not found'
+        }, { status: 404 });
+      }
+    }
+    
+    // For user: show only approved
+    if (role === 'user' || (!role && !phone)) {
+      jobs = jobs.filter(job => job.approved === true);
+    }
+
+    console.log(`Found ${jobs.length} jobs after filtering`);
 
     return NextResponse.json({
       success: true,
@@ -186,7 +221,7 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Error fetching jobs:', error);
+    console.error('Error in GET handler:', error);
     return NextResponse.json(
       { 
         success: false, 
@@ -209,7 +244,7 @@ export async function POST(request: NextRequest) {
     console.log('Content-Type:', contentType);
     console.log('User Role:', userRole);
 
-    // Handle CSV upload
+    // Handle CSV upload (for admin campaigns)
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
       const file = formData.get('csvFile') as File;
@@ -249,29 +284,74 @@ export async function POST(request: NextRequest) {
       }
 
       const jobs = parsed.data.map((row: any, index: number) => {
-        // Convert CSV row to job object
+        // Convert CSV row to job object with new field mappings
         const job: any = {};
         
         // Map CSV columns to job fields
+        const fieldMappings: Record<string, string> = {
+          'title': 'title',
+          'description': 'description',
+          'company': 'company',
+          'location': 'location',
+          'salary': 'salary',
+          'amount': 'salary', // Support old 'amount' field
+          'requirements': 'requirements',
+          'deadline': 'deadline',
+          'category': 'category',
+          'type': 'contentType', // Map 'type' to 'contentType'
+          'contentType': 'contentType',
+          'contactEmail': 'contactEmail',
+          'contactPhone': 'contactPhone',
+          'contact': 'contactEmail', // Support old 'contact' field
+          'processingTime': 'processingTime',
+          'institution': 'institution',
+          'amenities': 'amenities',
+          'readyBy': 'readyBy',
+          'duration': 'processingTime', // Map 'duration' to 'processingTime'
+          'salaryRange': 'salary', // Map 'salaryRange' to 'salary'
+          'postedBy': 'postedBy'
+        };
+        
         Object.keys(row).forEach(key => {
           const value = row[key];
+          const mappedKey = fieldMappings[key] || key;
+          
           if (value !== undefined && value !== '') {
-            // Try to parse numbers
-            if (!isNaN(Number(value)) && value.trim() !== '') {
-              job[key] = Number(value);
+            // Handle special field types
+            if ((mappedKey === 'requirements' || mappedKey === 'amenities') && typeof value === 'string') {
+              // Split by semicolon or comma for arrays
+              job[mappedKey] = value.split(/[;,]/).map((item: string) => item.trim()).filter(Boolean);
+            } else if (!isNaN(Number(value)) && value.trim() !== '') {
+              job[mappedKey] = Number(value);
             } else if (value.toLowerCase() === 'true' || value.toLowerCase() === 'false') {
-              job[key] = value.toLowerCase() === 'true';
-            } else if (value.includes(',') && !value.includes('"')) {
-              // Handle comma-separated lists
-              job[key] = value.split(',').map((item: string) => item.trim());
+              job[mappedKey] = value.toLowerCase() === 'true';
             } else {
-              job[key] = value;
+              job[mappedKey] = value;
             }
           }
         });
         
+        // Auto-fill content type based on category if not provided
+        if (!job.contentType) {
+          if (csvContentType) {
+            job.contentType = csvContentType;
+          } else if (job.category) {
+            const category = job.category.toLowerCase();
+            if (category.includes('hostel') || category.includes('accommodation')) {
+              job.contentType = 'hostel';
+            } else if (category.includes('bursary') || category.includes('scholarship') || category.includes('helb')) {
+              job.contentType = 'bursary';
+            } else if (category.includes('internship')) {
+              job.contentType = 'internship';
+            } else if (category.includes('government') || category.includes('kra') || category.includes('passport') || category.includes('id')) {
+              job.contentType = 'government';
+            } else {
+              job.contentType = 'job';
+            }
+          }
+        }
+        
         // Add metadata
-        job.contentType = csvContentType;
         job.approved = userRole === 'admin'; // Auto-approve if uploaded by admin
         job.uploadedBy = uploadedBy;
         job.uploadedAt = new Date().toISOString();
@@ -279,19 +359,33 @@ export async function POST(request: NextRequest) {
         job.updatedAt = new Date().toISOString();
         job.status = 'active';
         
+        // Set defaults for required fields
+        if (!job.location) job.location = 'Nairobi';
+        if (!job.salary) job.salary = '0';
+        if (!job.processingTime) job.processingTime = '2-3 working days';
+        if (!job.requirements) job.requirements = [];
+        if (!job.amenities) job.amenities = [];
+        
         return job;
       });
 
-      // Create jobs in Firestore one by one (batch not available in REST API)
+      // Create jobs in Firestore one by one
       const createdJobs = [];
       for (const job of jobs) {
-        const jobId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-        const jobData = {
-          fields: convertToFirestoreFields(job)
-        };
-        
-        await firestoreRequest(`/jobs/${jobId}`, 'PATCH', jobData);
-        createdJobs.push({ id: jobId, ...job });
+        try {
+          const jobId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+          const jobData = {
+            fields: convertToFirestoreFields(job)
+          };
+          
+          console.log('Creating job in Firestore:', jobId);
+          const firestoreResponse = await firestoreRequest(`/jobs/${jobId}`, 'PATCH', jobData);
+          console.log('Firestore response:', firestoreResponse);
+          
+          createdJobs.push({ id: jobId, ...job });
+        } catch (error) {
+          console.error('Error creating job in batch:', error);
+        }
       }
       
       console.log(`Bulk upload: Created ${createdJobs.length} ${csvContentType} entries`);
@@ -305,57 +399,131 @@ export async function POST(request: NextRequest) {
       });
 
     } else {
-      // Handle single job creation
+      // Handle single job creation - supports both campaign and e-citizen formats
       const body = await request.json();
-      console.log('Creating single job:', body);
+      console.log('Creating single job with data:', body);
 
-      const { 
-        title, 
-        description, 
-        company, 
-        location, 
-        salary, 
-        requirements, 
-        deadline,
-        category,
-        contentType = 'job',
-        postedBy,
-        contactPhone,
-        contactEmail
-      } = body;
-
-      if (!title || !description || !company) {
+      // Check if this is an e-citizen service format (has serviceId)
+      const isECitizenService = body.serviceId && body.serviceTitle && body.category;
+      const isCampaignFormat = body.title && body.description && body.company;
+      
+      if (!isECitizenService && !isCampaignFormat) {
         return NextResponse.json(
-          { success: false, error: 'Title, description, and company are required' },
+          { 
+            success: false, 
+            error: 'Either provide serviceId, serviceTitle, category (for e-citizen) OR title, description, company (for campaigns)' 
+          },
           { status: 400 }
         );
       }
 
-      const jobData = {
-        title,
-        description,
-        company,
-        location: location || 'Nairobi',
-        salary: salary || 'Negotiable',
-        requirements: Array.isArray(requirements) ? requirements : [requirements].filter(Boolean),
-        deadline: deadline || null,
-        category: category || 'general',
-        contentType: contentType || 'job',
-        approved: userRole === 'admin', // Auto-approve for admin
-        postedBy: postedBy || 'Admin',
-        contactPhone: contactPhone || null,
-        contactEmail: contactEmail || null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        status: 'active'
-      };
+      let jobData: any;
+      
+      if (isECitizenService) {
+        // E-Citizen Service Format
+        const {
+          serviceId,
+          serviceTitle,
+          category,
+          amount,
+          description = '',
+          postedBy,
+          customerPhone,
+          requirements = [],
+          status = 'pending'
+        } = body;
+
+        jobData = {
+          serviceId,
+          title: serviceTitle, // Map serviceTitle to title for consistency
+          description: description || `Service request for ${serviceTitle}`,
+          company: 'E-Citizen Government Services', // Default company for e-citizen
+          amount: amount || 0,
+          category,
+          contentType: 'e-citizen',
+          postedBy: postedBy || 'customer',
+          customerPhone: customerPhone || postedBy,
+          requirements: Array.isArray(requirements) ? requirements : 
+                        (typeof requirements === 'string' ? requirements.split(/[;,]/).map((item: string) => item.trim()).filter(Boolean) : []),
+          status: status || 'pending',
+          approved: userRole === 'admin',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          assignedWorker: null,
+          assignedWorkerPhone: null,
+          assignedAt: null,
+          completedAt: null
+        };
+      } else {
+        // Campaign Format
+        const { 
+          title, 
+          description, 
+          company, 
+          location, 
+          salary, 
+          amount, // Support old 'amount' field
+          requirements, 
+          deadline,
+          category,
+          contentType = 'job',
+          type, // Support old 'type' field
+          postedBy,
+          contactPhone,
+          contactEmail,
+          contact // Support old 'contact' field
+        } = body;
+
+        // Process requirements array
+        const processRequirements = (req: any): string[] => {
+          if (Array.isArray(req)) return req.filter(Boolean);
+          if (typeof req === 'string') {
+            return req.split(/[;,]/).map((item: string) => item.trim()).filter(Boolean);
+          }
+          return [];
+        };
+
+        jobData = {
+          title,
+          description,
+          company,
+          location: location || 'Nairobi',
+          salary: salary || amount || '0',
+          requirements: processRequirements(requirements),
+          deadline: deadline || null,
+          category: category || 'general',
+          contentType: contentType || type || 'job',
+          approved: userRole === 'admin',
+          postedBy: postedBy || 'Admin',
+          contactPhone: contactPhone || null,
+          contactEmail: contactEmail || contact || null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          status: 'active'
+        };
+      }
 
       const jobId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
       const firestoreData = {
         fields: convertToFirestoreFields(jobData)
       };
       
-      await firestoreRequest(`/jobs/${jobId}`, 'PATCH', firestoreData);
+      console.log('Attempting to save to Firestore:', { jobId, jobData });
+      
+      try {
+        const firestoreResponse = await firestoreRequest(`/jobs/${jobId}`, 'PATCH', firestoreData);
+        console.log('Firestore save successful:', firestoreResponse);
+      } catch (error) {
+        console.error('Firestore save failed:', error);
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'Failed to save job to database',
+            details: error instanceof Error ? error.message : 'Unknown error'
+          },
+          { status: 500 }
+        );
+      }
       
       console.log('Created job with ID:', jobId);
 
@@ -368,7 +536,7 @@ export async function POST(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Error creating job:', error);
+    console.error('Error in POST handler:', error);
     return NextResponse.json(
       { 
         success: false, 
@@ -398,9 +566,11 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     console.log('Updating job:', id, 'with data:', body);
 
-    // Check if job exists
+    // Check if job exists and get current data
+    let existingData: any = {};
     try {
-      await firestoreRequest(`/jobs/${id}`);
+      const existingJob = await firestoreRequest(`/jobs/${id}`);
+      existingData = convertFirestoreDoc(existingJob);
     } catch (error) {
       return NextResponse.json(
         { success: false, error: 'Job not found' },
@@ -408,16 +578,23 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Update job with new data
+    // Merge existing data with new data
     const updateData = {
+      ...existingData,
       ...body,
       updatedAt: new Date().toISOString()
     };
+
+    // Remove Firestore internal fields
+    delete updateData.id;
+    delete updateData.name;
+    delete updateData.fields;
 
     const firestoreData = {
       fields: convertToFirestoreFields(updateData)
     };
 
+    console.log('Updating Firestore document:', id);
     await firestoreRequest(`/jobs/${id}`, 'PATCH', firestoreData);
 
     console.log('Updated job:', id);
@@ -467,6 +644,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete the job
+    console.log('Deleting Firestore document:', id);
     await firestoreRequest(`/jobs/${id}`, 'DELETE');
 
     console.log('Deleted job:', id);
@@ -506,9 +684,11 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // Check if job exists
+    // Check if job exists and get current data
+    let existingData: any = {};
     try {
-      await firestoreRequest(`/jobs/${id}`);
+      const existingJob = await firestoreRequest(`/jobs/${id}`);
+      existingData = convertFirestoreDoc(existingJob);
     } catch (error) {
       return NextResponse.json(
         { success: false, error: 'Job not found' },
@@ -517,8 +697,14 @@ export async function PATCH(request: NextRequest) {
     }
 
     let updateData: any = {
+      ...existingData, // Preserve all existing fields
       updatedAt: new Date().toISOString()
     };
+
+    // Remove Firestore internal fields
+    delete updateData.id;
+    delete updateData.name;
+    delete updateData.fields;
 
     // Handle different actions
     if (action === 'approve') {
@@ -534,10 +720,36 @@ export async function PATCH(request: NextRequest) {
     } else if (action === 'activate') {
       updateData.status = 'active';
       console.log('Activating job:', id);
+    } else if (action === 'assign') {
+      const body = await request.json();
+      updateData = { 
+        ...existingData, // Preserve all existing fields
+        ...body, // Add new assignment fields
+        assignedAt: new Date().toISOString(),
+        status: 'assigned',
+        updatedAt: new Date().toISOString()
+      };
+      // Remove Firestore internal fields
+      delete updateData.id;
+      delete updateData.name;
+      delete updateData.fields;
+      console.log('Assigning job:', id, 'to worker:', body.assignedWorkerPhone);
+    } else if (action === 'complete') {
+      updateData.status = 'completed';
+      updateData.completedAt = new Date().toISOString();
+      console.log('Completing job:', id);
     } else {
       // Regular PATCH with body data
       const body = await request.json();
-      updateData = { ...body, updatedAt: new Date().toISOString() };
+      updateData = { 
+        ...existingData, // Preserve all existing fields
+        ...body, // Add new data
+        updatedAt: new Date().toISOString()
+      };
+      // Remove Firestore internal fields
+      delete updateData.id;
+      delete updateData.name;
+      delete updateData.fields;
       console.log('Patching job:', id, 'with data:', body);
     }
 
@@ -545,6 +757,7 @@ export async function PATCH(request: NextRequest) {
       fields: convertToFirestoreFields(updateData)
     };
 
+    console.log('Patching Firestore document:', id);
     await firestoreRequest(`/jobs/${id}`, 'PATCH', firestoreData);
 
     console.log('Patched job:', id, 'action:', action || 'custom');
