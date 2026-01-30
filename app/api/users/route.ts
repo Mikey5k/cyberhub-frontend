@@ -67,13 +67,13 @@ function convertFirestoreUser(doc: any): any {
     const field = fields[key];
     if (field.stringValue !== undefined) user[key] = field.stringValue;
     else if (field.integerValue !== undefined) user[key] = Number(field.integerValue);
+    else if (field.doubleValue !== undefined) user[key] = Number(field.doubleValue);
     else if (field.booleanValue !== undefined) user[key] = field.booleanValue;
     else if (field.timestampValue !== undefined) user[key] = field.timestampValue;
-    else if (field.doubleValue !== undefined) user[key] = Number(field.doubleValue);
     else if (field.arrayValue?.values) {
       user[key] = field.arrayValue.values.map((val: any) => {
         if (val.mapValue?.fields) {
-          // Handle nested objects (like transactions or withdrawal requests)
+          // Handle nested objects
           const nestedObj: any = {};
           Object.keys(val.mapValue.fields).forEach(nestedKey => {
             const nestedField = val.mapValue.fields[nestedKey];
@@ -103,6 +103,9 @@ function convertFirestoreUser(doc: any): any {
   if (!user.joinDate) user.joinDate = user.createdAt || new Date().toISOString();
   if (!user.transactions) user.transactions = [];
   if (!user.withdrawalRequests) user.withdrawalRequests = [];
+  
+  // Fix ID: remove leading/trailing spaces
+  if (user.id) user.id = user.id.trim();
   
   return user;
 }
@@ -168,14 +171,17 @@ function convertToFirestoreFields(data: any): any {
   return fields;
 }
 
-// GET - Get user by email or ID, or get all users for admin
+// GET - Get user by email, ID, referredBy, or get all users for admin
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const email = searchParams.get('email');
     const id = searchParams.get('id');
+    const referredBy = searchParams.get('referredBy');
+    const status = searchParams.get('status');
     const getAll = searchParams.get('getAll');
     const adminKey = searchParams.get('adminKey');
+    const phone = searchParams.get('phone'); // Added phone parameter
 
     // ADMIN: Get all users (for admin dashboard)
     if (getAll === 'true' && adminKey === 'veritas-admin-2024') {
@@ -183,30 +189,28 @@ export async function GET(request: NextRequest) {
         const response = await firestoreRequest('/users');
         if (response && response.documents) {
           const allUsers = response.documents.map(convertFirestoreUser);
+
+          // Apply filters if provided
+          let filteredUsers = allUsers;
           
+          if (referredBy) {
+            filteredUsers = filteredUsers.filter((user: any) => 
+              user.referredBy && user.referredBy.trim() === referredBy.trim()
+            );
+          }
+          
+          if (status) {
+            filteredUsers = filteredUsers.filter((user: any) => 
+              user.status && user.status.toLowerCase() === status.toLowerCase()
+            );
+          }
+
           // Remove password hashes and add default values
-          const usersWithoutPasswords = allUsers.map((user: any) => {
+          const usersWithoutPasswords = filteredUsers.map((user: any) => {
             const { passwordHash, ...userWithoutPassword } = user;
-            
-            // Ensure all required fields for admin dashboard
-            return {
-              id: userWithoutPassword.id,
-              phone: userWithoutPassword.phone || '',
-              role: userWithoutPassword.role || 'user',
-              name: userWithoutPassword.name || '',
-              email: userWithoutPassword.email || '',
-              balance: userWithoutPassword.balance || 0,
-              totalEarnings: userWithoutPassword.totalEarnings || 0,
-              status: userWithoutPassword.status || 'active',
-              referralCode: userWithoutPassword.referralCode || '',
-              referredBy: userWithoutPassword.referredBy || '',
-              joinDate: userWithoutPassword.joinDate || userWithoutPassword.createdAt || new Date().toISOString(),
-              lastActive: userWithoutPassword.lastActive || '',
-              transactions: userWithoutPassword.transactions || [],
-              withdrawalRequests: userWithoutPassword.withdrawalRequests || []
-            };
+            return userWithoutPassword;
           });
-          
+
           return NextResponse.json({
             success: true,
             data: usersWithoutPasswords,
@@ -230,10 +234,52 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // ORIGINAL: Get single user by email or ID
-    if (!email && !id) {
+    // Get users by referredBy (for manager dashboard)
+    if (referredBy) {
+      try {
+        const response = await firestoreRequest('/users');
+        if (response && response.documents) {
+          const allUsers = response.documents.map(convertFirestoreUser);
+          
+          // Filter by referredBy (with trim to handle spaces)
+          const referredUsers = allUsers.filter((user: any) => 
+            user.referredBy && user.referredBy.trim() === referredBy.trim()
+          );
+          
+          // Apply status filter if provided
+          let filteredUsers = referredUsers;
+          if (status) {
+            filteredUsers = filteredUsers.filter((user: any) => 
+              user.status && user.status.toLowerCase() === status.toLowerCase()
+            );
+          }
+
+          // Remove password hashes
+          const usersWithoutPasswords = filteredUsers.map((user: any) => {
+            const { passwordHash, ...userWithoutPassword } = user;
+            return userWithoutPassword;
+          });
+
+          return NextResponse.json({
+            success: true,
+            data: usersWithoutPasswords,
+            count: usersWithoutPasswords.length
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching users by referredBy:', error);
+        return NextResponse.json({
+          success: true,
+          data: [],
+          count: 0
+        });
+      }
+    }
+
+    // Get single user by ID, email, or phone
+    if (!email && !id && !phone) {
       return NextResponse.json(
-        { success: false, error: 'Email or ID parameter required. Use getAll=true&adminKey=veritas-admin-2024 for all users.' },
+        { success: false, error: 'Email, ID, phone, or referredBy parameter required. Use getAll=true&adminKey=veritas-admin-2024 for all users.' },
         { status: 400 }
       );
     }
@@ -243,12 +289,25 @@ export async function GET(request: NextRequest) {
     if (id) {
       // Get user by ID
       try {
-        const response = await firestoreRequest(`/users/${id}`);
+        const response = await firestoreRequest(`/users/${id.trim()}`);
         if (response && response.fields) {
           user = convertFirestoreUser(response);
         }
       } catch (error) {
-        // User not found, continue to email search
+        // User not found, continue to other searches
+      }
+    }
+    
+    if (!user && phone) {
+      // Search user by phone
+      try {
+        const response = await firestoreRequest('/users');
+        if (response && response.documents) {
+          const users = response.documents.map(convertFirestoreUser);
+          user = users.find((u: any) => u.phone && u.phone.trim() === phone.trim());
+        }
+      } catch (error) {
+        console.error('Error searching user by phone:', error);
       }
     }
     
@@ -274,7 +333,7 @@ export async function GET(request: NextRequest) {
 
     // Don't return password hash
     const { passwordHash, ...userWithoutPassword } = user;
-    
+
     return NextResponse.json({
       success: true,
       user: userWithoutPassword
@@ -293,7 +352,17 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, password, name, phone, role = 'user', status = 'active', balance = 0, referredBy = '' } = body;
+    const { 
+      email, 
+      password, 
+      name, 
+      phone, 
+      role = 'user', 
+      status = 'active', 
+      balance = 0, 
+      referredBy = '',
+      referralCode = ''
+    } = body;
 
     // Validation
     if (!email || !password || !name) {
@@ -326,7 +395,7 @@ export async function POST(request: NextRequest) {
     // Create user
     const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const now = new Date().toISOString();
-    
+
     const userData = {
       id: userId,
       email,
@@ -337,14 +406,17 @@ export async function POST(request: NextRequest) {
       balance: Number(balance) || 0,
       totalEarnings: 0,
       status: status || 'active',
-      referralCode: '',
+      referralCode: referralCode || generateReferralCode(name),
       referredBy: referredBy || '',
       createdAt: now,
       updatedAt: now,
       joinDate: now,
-      lastActive: '',
+      lastActive: now,
       transactions: [],
-      withdrawalRequests: []
+      withdrawalRequests: [],
+      agentSince: role === 'worker' ? now : '',
+      teamSize: role === 'manager' ? 0 : undefined,
+      totalTeamEarnings: role === 'manager' ? 0 : undefined
     };
 
     const firestoreData = {
@@ -358,6 +430,38 @@ export async function POST(request: NextRequest) {
 
     // Don't return password hash
     const { passwordHash: _, ...userWithoutPassword } = userData;
+
+    // If user has a referrer, update referrer's team size
+    if (referredBy && role === 'worker') {
+      try {
+        // Find referrer
+        const allUsersResponse = await firestoreRequest('/users');
+        if (allUsersResponse && allUsersResponse.documents) {
+          const allUsers = allUsersResponse.documents.map(convertFirestoreUser);
+          const referrer = allUsers.find((u: any) => 
+            u.id && u.id.trim() === referredBy.trim() || 
+            u.phone && u.phone.trim() === referredBy.trim()
+          );
+          
+          if (referrer && (referrer.role === 'manager' || referrer.role === 'admin')) {
+            // Update referrer's team size
+            const updatedTeamSize = (referrer.teamSize || 0) + 1;
+            const updateData = {
+              teamSize: updatedTeamSize,
+              updatedAt: now
+            };
+            
+            const updateFields = convertToFirestoreFields(updateData);
+            await firestoreRequest(`/users/${referrer.id}`, 'PATCH', {
+              fields: updateFields
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error updating referrer team size:', error);
+        // Don't fail the user creation if this fails
+      }
+    }
 
     return NextResponse.json({
       success: true,
@@ -375,158 +479,89 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH - Login user or update user status (for admin dashboard)
+// PATCH - Login user (email/password) OR update user status/fields
 export async function PATCH(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const id = searchParams.get('id');
-    const body = await request.json();
+    const action = searchParams.get('action');
     
-    // ADMIN: Update user status (from admin dashboard)
-    if (id) {
-      // Get existing user data first
-      let existingUser;
+    // If no ID parameter, assume it's a login request
+    if (!id && !action) {
+      const body = await request.json();
+      const { email, password } = body;
+
+      if (!email || !password) {
+        return NextResponse.json(
+          { success: false, error: 'Email and password are required' },
+          { status: 400 }
+        );
+      }
+
+      // Find user by email
+      let user: any = null;
       try {
-        const response = await firestoreRequest(`/users/${id}`);
-        if (response && response.fields) {
-          existingUser = convertFirestoreUser(response);
+        const response = await firestoreRequest('/users');
+        if (response && response.documents) {
+          const users = response.documents.map(convertFirestoreUser);
+          user = users.find((u: any) => u.email === email);
         }
       } catch (error) {
+        console.error('Error searching user by email:', error);
+      }
+
+      if (!user) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid email or password' },
+          { status: 401 }
+        );
+      }
+
+      // Verify password
+      const isValidPassword = await verifyPassword(password, user.passwordHash);
+      if (!isValidPassword) {
+        return NextResponse.json(
+          { success: false, error: 'Invalid email or password' },
+          { status: 401 }
+        );
+      }
+
+      // Generate JWT token
+      const token = generateToken(user.id, user.email, user.role);
+
+      // Don't return password hash
+      const { passwordHash, ...userWithoutPassword } = user;
+
+      return NextResponse.json({
+        success: true,
+        message: 'Login successful',
+        user: userWithoutPassword,
+        token
+      });
+    }
+    
+    // If ID parameter exists, it's an update request
+    const body = await request.json();
+    const { status, balance, totalEarnings, teamSize, totalTeamEarnings } = body;
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'User ID is required for updates' },
+        { status: 400 }
+      );
+    }
+
+    // Check if user exists
+    let user: any = null;
+    try {
+      const response = await firestoreRequest(`/users/${id.trim()}`);
+      if (response && response.fields) {
+        user = convertFirestoreUser(response);
+      } else {
         return NextResponse.json(
           { success: false, error: 'User not found' },
           { status: 404 }
         );
-      }
-
-      // Merge existing data with updates
-      const updateData: any = {
-        ...existingUser, // Preserve all existing fields
-        ...body, // Apply updates
-        updatedAt: new Date().toISOString()
-      };
-
-      // Remove Firestore internal fields
-      delete updateData.id;
-      delete updateData.name;
-      delete updateData.fields;
-      delete updateData.passwordHash;
-
-      // Ensure numeric fields are numbers
-      if (updateData.balance !== undefined) updateData.balance = Number(updateData.balance);
-      if (updateData.totalEarnings !== undefined) updateData.totalEarnings = Number(updateData.totalEarnings);
-
-      console.log('Updating user with merged data:', updateData);
-
-      const firestoreData = {
-        fields: convertToFirestoreFields(updateData)
-      };
-
-      await firestoreRequest(`/users/${id}`, 'PATCH', firestoreData);
-
-      return NextResponse.json({
-        success: true,
-        message: 'User updated successfully'
-      });
-    }
-    
-    // ORIGINAL: Login user (email/password)
-    const { email, password } = body;
-
-    if (!email || !password) {
-      return NextResponse.json(
-        { success: false, error: 'Email and password are required' },
-        { status: 400 }
-      );
-    }
-
-    // Find user by email
-    let user: any = null;
-    try {
-      const response = await firestoreRequest('/users');
-      if (response && response.documents) {
-        const users = response.documents.map(convertFirestoreUser);
-        user = users.find((u: any) => u.email === email);
-      }
-    } catch (error) {
-      console.error('Error searching user by email:', error);
-    }
-
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid email or password' },
-        { status: 401 }
-      );
-    }
-
-    // Verify password
-    const isValidPassword = await verifyPassword(password, user.passwordHash);
-    if (!isValidPassword) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid email or password' },
-        { status: 401 }
-      );
-    }
-
-    // Generate JWT token
-    const token = generateToken(user.id, user.email, user.role);
-
-    // Update last active - preserve all existing fields
-    const updateData = {
-      ...user,
-      lastActive: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    
-    // Remove Firestore internal fields
-    delete updateData.id;
-    delete updateData.name;
-    delete updateData.fields;
-    delete updateData.passwordHash;
-    
-    const firestoreUpdate = {
-      fields: convertToFirestoreFields(updateData)
-    };
-    
-    await firestoreRequest(`/users/${user.id}`, 'PATCH', firestoreUpdate);
-
-    // Don't return password hash
-    const { passwordHash, ...userWithoutPassword } = user;
-
-    return NextResponse.json({
-      success: true,
-      message: 'Login successful',
-      user: userWithoutPassword,
-      token
-    });
-
-  } catch (error) {
-    console.error('Error in PATCH request:', error);
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
-
-// PUT - Update user profile
-export async function PUT(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { id, name, phone, balance, totalEarnings } = body;
-
-    if (!id) {
-      return NextResponse.json(
-        { success: false, error: 'User ID is required' },
-        { status: 400 }
-      );
-    }
-
-    // Get existing user data first
-    let existingUser;
-    try {
-      const response = await firestoreRequest(`/users/${id}`);
-      if (response && response.fields) {
-        existingUser = convertFirestoreUser(response);
       }
     } catch (error) {
       return NextResponse.json(
@@ -535,28 +570,89 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Merge existing data with updates
+    // Update user data
     const updateData: any = {
-      ...existingUser, // Preserve all existing fields
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      lastActive: new Date().toISOString()
     };
 
-    if (name) updateData.name = name;
-    if (phone !== undefined) updateData.phone = phone;
+    if (status !== undefined) updateData.status = status;
     if (balance !== undefined) updateData.balance = Number(balance);
     if (totalEarnings !== undefined) updateData.totalEarnings = Number(totalEarnings);
+    if (teamSize !== undefined) updateData.teamSize = Number(teamSize);
+    if (totalTeamEarnings !== undefined) updateData.totalTeamEarnings = Number(totalTeamEarnings);
 
-    // Remove Firestore internal fields
-    delete updateData.id;
-    delete updateData.name;
-    delete updateData.fields;
-    delete updateData.passwordHash;
+    // Special handling for balance increments/decrements
+    if (body.$increment && body.$increment.balance !== undefined) {
+      updateData.balance = (user.balance || 0) + Number(body.$increment.balance);
+    }
 
     const firestoreData = {
       fields: convertToFirestoreFields(updateData)
     };
 
-    await firestoreRequest(`/users/${id}`, 'PATCH', firestoreData);
+    await firestoreRequest(`/users/${id.trim()}`, 'PATCH', firestoreData);
+
+    // Get updated user
+    const updatedResponse = await firestoreRequest(`/users/${id.trim()}`);
+    const updatedUser = convertFirestoreUser(updatedResponse);
+    const { passwordHash, ...userWithoutPassword } = updatedUser;
+
+    return NextResponse.json({
+      success: true,
+      message: 'User updated successfully',
+      user: userWithoutPassword
+    });
+
+  } catch (error) {
+    console.error('Error in PATCH:', error);
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT - Update user (compatible with existing code)
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { id, name, phone, status, balance, teamSize } = body;
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'User ID is required' },
+        { status: 400 }
+      );
+    }
+
+    // Check if user exists
+    try {
+      await firestoreRequest(`/users/${id.trim()}`);
+    } catch (error) {
+      return NextResponse.json(
+        { success: false, error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    // Update user data
+    const updateData: any = {
+      updatedAt: new Date().toISOString(),
+      lastActive: new Date().toISOString()
+    };
+
+    if (name) updateData.name = name;
+    if (phone !== undefined) updateData.phone = phone;
+    if (status !== undefined) updateData.status = status;
+    if (balance !== undefined) updateData.balance = Number(balance);
+    if (teamSize !== undefined) updateData.teamSize = Number(teamSize);
+
+    const firestoreData = {
+      fields: convertToFirestoreFields(updateData)
+    };
+
+    await firestoreRequest(`/users/${id.trim()}`, 'PATCH', firestoreData);
 
     return NextResponse.json({
       success: true,
@@ -570,4 +666,11 @@ export async function PUT(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// Helper function to generate referral code
+function generateReferralCode(name: string): string {
+  const initials = name.split(' ').map(n => n[0]).join('').toUpperCase();
+  const randomNum = Math.floor(100 + Math.random() * 900);
+  return `${initials}${randomNum}`;
 }
