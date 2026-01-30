@@ -1,0 +1,573 @@
+import { NextRequest, NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+
+export const runtime = "nodejs";
+
+// Firestore REST API helper
+const FIRESTORE_URL = `https://firestore.googleapis.com/v1/projects/${process.env.FIREBASE_PROJECT_ID}/databases/(default)/documents`;
+
+async function firestoreRequest(endpoint: string, method: string = 'GET', body?: any) {
+  const url = `${FIRESTORE_URL}${endpoint}`;
+  const apiKey = process.env.FIREBASE_API_KEY;
+  
+  if (!apiKey) {
+    throw new Error("Firebase API key not configured");
+  }
+
+  const options: RequestInit = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  };
+
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
+
+  // Add API key as query parameter
+  const finalUrl = `${url}?key=${apiKey}`;
+  const response = await fetch(finalUrl, options);
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Firestore API error (${response.status}):`, errorText);
+    throw new Error(`Firestore request failed: ${response.status} ${errorText}`);
+  }
+  
+  return await response.json();
+}
+
+// Helper functions
+function generateToken(userId: string, email: string, role: string) {
+  const JWT_SECRET = process.env.JWT_SECRET || 'veritas-secret-key-change-in-production';
+  return jwt.sign(
+    { userId, email, role },
+    JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+}
+
+async function hashPassword(password: string): Promise<string> {
+  const salt = await bcrypt.genSalt(10);
+  return bcrypt.hash(password, salt);
+}
+
+async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(password, hash);
+}
+
+// Convert Firestore document to user object
+function convertFirestoreUser(doc: any): any {
+  const fields = doc.fields || {};
+  const user: any = { id: doc.name.split('/').pop() };
+  
+  Object.keys(fields).forEach(key => {
+    const field = fields[key];
+    if (field.stringValue !== undefined) user[key] = field.stringValue;
+    else if (field.integerValue !== undefined) user[key] = Number(field.integerValue);
+    else if (field.booleanValue !== undefined) user[key] = field.booleanValue;
+    else if (field.timestampValue !== undefined) user[key] = field.timestampValue;
+    else if (field.doubleValue !== undefined) user[key] = Number(field.doubleValue);
+    else if (field.arrayValue?.values) {
+      user[key] = field.arrayValue.values.map((val: any) => {
+        if (val.mapValue?.fields) {
+          // Handle nested objects (like transactions or withdrawal requests)
+          const nestedObj: any = {};
+          Object.keys(val.mapValue.fields).forEach(nestedKey => {
+            const nestedField = val.mapValue.fields[nestedKey];
+            if (nestedField.stringValue !== undefined) nestedObj[nestedKey] = nestedField.stringValue;
+            else if (nestedField.integerValue !== undefined) nestedObj[nestedKey] = Number(nestedField.integerValue);
+            else if (nestedField.doubleValue !== undefined) nestedObj[nestedKey] = Number(nestedField.doubleValue);
+            else if (nestedField.booleanValue !== undefined) nestedObj[nestedKey] = nestedField.booleanValue;
+          });
+          return nestedObj;
+        } else if (val.stringValue !== undefined) {
+          return val.stringValue;
+        } else if (val.integerValue !== undefined) {
+          return Number(val.integerValue);
+        } else if (val.doubleValue !== undefined) {
+          return Number(val.doubleValue);
+        }
+        return val;
+      });
+    }
+  });
+  
+  // Ensure default values for admin dashboard
+  if (!user.role) user.role = 'user';
+  if (!user.status) user.status = 'active';
+  if (user.balance === undefined) user.balance = 0;
+  if (user.totalEarnings === undefined) user.totalEarnings = 0;
+  if (!user.joinDate) user.joinDate = user.createdAt || new Date().toISOString();
+  if (!user.transactions) user.transactions = [];
+  if (!user.withdrawalRequests) user.withdrawalRequests = [];
+  
+  return user;
+}
+
+// Convert user object to Firestore fields
+function convertToFirestoreFields(data: any): any {
+  const fields: any = {};
+  
+  Object.keys(data).forEach(key => {
+    const value = data[key];
+    
+    if (value === null || value === undefined) {
+      return;
+    }
+    
+    if (typeof value === 'string') {
+      fields[key] = { stringValue: value };
+    } else if (typeof value === 'number') {
+      if (Number.isInteger(value)) {
+        fields[key] = { integerValue: value.toString() };
+      } else {
+        fields[key] = { doubleValue: value };
+      }
+    } else if (typeof value === 'boolean') {
+      fields[key] = { booleanValue: value };
+    } else if (Array.isArray(value)) {
+      fields[key] = {
+        arrayValue: {
+          values: value.map(item => {
+            if (typeof item === 'object' && item !== null) {
+              // Handle nested objects (transactions, withdrawal requests)
+              const mapFields: any = {};
+              Object.keys(item).forEach(itemKey => {
+                const itemValue = item[itemKey];
+                if (typeof itemValue === 'string') {
+                  mapFields[itemKey] = { stringValue: itemValue };
+                } else if (typeof itemValue === 'number') {
+                  if (Number.isInteger(itemValue)) {
+                    mapFields[itemKey] = { integerValue: itemValue.toString() };
+                  } else {
+                    mapFields[itemKey] = { doubleValue: itemValue };
+                  }
+                } else if (typeof itemValue === 'boolean') {
+                  mapFields[itemKey] = { booleanValue: itemValue };
+                }
+              });
+              return { mapValue: { fields: mapFields } };
+            } else if (typeof item === 'string') {
+              return { stringValue: item };
+            } else if (typeof item === 'number') {
+              if (Number.isInteger(item)) {
+                return { integerValue: item.toString() };
+              }
+              return { doubleValue: item };
+            }
+            return { stringValue: String(item) };
+          })
+        }
+      };
+    }
+  });
+  
+  return fields;
+}
+
+// GET - Get user by email or ID, or get all users for admin
+export async function GET(request: NextRequest) {
+  try {
+    const searchParams = request.nextUrl.searchParams;
+    const email = searchParams.get('email');
+    const id = searchParams.get('id');
+    const getAll = searchParams.get('getAll');
+    const adminKey = searchParams.get('adminKey');
+
+    // ADMIN: Get all users (for admin dashboard)
+    if (getAll === 'true' && adminKey === 'veritas-admin-2024') {
+      try {
+        const response = await firestoreRequest('/users');
+        if (response && response.documents) {
+          const allUsers = response.documents.map(convertFirestoreUser);
+          
+          // Remove password hashes and add default values
+          const usersWithoutPasswords = allUsers.map((user: any) => {
+            const { passwordHash, ...userWithoutPassword } = user;
+            
+            // Ensure all required fields for admin dashboard
+            return {
+              id: userWithoutPassword.id,
+              phone: userWithoutPassword.phone || '',
+              role: userWithoutPassword.role || 'user',
+              name: userWithoutPassword.name || '',
+              email: userWithoutPassword.email || '',
+              balance: userWithoutPassword.balance || 0,
+              totalEarnings: userWithoutPassword.totalEarnings || 0,
+              status: userWithoutPassword.status || 'active',
+              referralCode: userWithoutPassword.referralCode || '',
+              referredBy: userWithoutPassword.referredBy || '',
+              joinDate: userWithoutPassword.joinDate || userWithoutPassword.createdAt || new Date().toISOString(),
+              lastActive: userWithoutPassword.lastActive || '',
+              transactions: userWithoutPassword.transactions || [],
+              withdrawalRequests: userWithoutPassword.withdrawalRequests || []
+            };
+          });
+          
+          return NextResponse.json({
+            success: true,
+            data: usersWithoutPasswords,
+            count: usersWithoutPasswords.length
+          });
+        } else {
+          return NextResponse.json({
+            success: true,
+            data: [],
+            count: 0
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching all users:', error);
+        return NextResponse.json({
+          success: true,
+          data: [],
+          count: 0,
+          message: 'No users found or collection empty'
+        });
+      }
+    }
+
+    // ORIGINAL: Get single user by email or ID
+    if (!email && !id) {
+      return NextResponse.json(
+        { success: false, error: 'Email or ID parameter required. Use getAll=true&adminKey=veritas-admin-2024 for all users.' },
+        { status: 400 }
+      );
+    }
+
+    let user: any = null;
+    
+    if (id) {
+      // Get user by ID
+      try {
+        const response = await firestoreRequest(`/users/${id}`);
+        if (response && response.fields) {
+          user = convertFirestoreUser(response);
+        }
+      } catch (error) {
+        // User not found, continue to email search
+      }
+    }
+    
+    if (!user && email) {
+      // Search user by email
+      try {
+        const response = await firestoreRequest('/users');
+        if (response && response.documents) {
+          const users = response.documents.map(convertFirestoreUser);
+          user = users.find((u: any) => u.email === email);
+        }
+      } catch (error) {
+        console.error('Error searching user by email:', error);
+      }
+    }
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    // Don't return password hash
+    const { passwordHash, ...userWithoutPassword } = user;
+    
+    return NextResponse.json({
+      success: true,
+      user: userWithoutPassword
+    });
+
+  } catch (error) {
+    console.error('Error in users API:', error);
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// POST - Create new user (sign up)
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { email, password, name, phone, role = 'user', status = 'active', balance = 0, referredBy = '' } = body;
+
+    // Validation
+    if (!email || !password || !name) {
+      return NextResponse.json(
+        { success: false, error: 'Email, password, and name are required' },
+        { status: 400 }
+      );
+    }
+
+    // Check if user already exists by email
+    try {
+      const response = await firestoreRequest('/users');
+      if (response && response.documents) {
+        const users = response.documents.map(convertFirestoreUser);
+        const existingUser = users.find((u: any) => u.email === email);
+        if (existingUser) {
+          return NextResponse.json(
+            { success: false, error: 'User with this email already exists' },
+            { status: 409 }
+          );
+        }
+      }
+    } catch (error) {
+      // If collection doesn't exist yet, that's fine
+    }
+
+    // Hash password
+    const passwordHash = await hashPassword(password);
+
+    // Create user
+    const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const now = new Date().toISOString();
+    
+    const userData = {
+      id: userId,
+      email,
+      passwordHash,
+      name,
+      phone: phone || '',
+      role,
+      balance: Number(balance) || 0,
+      totalEarnings: 0,
+      status: status || 'active',
+      referralCode: '',
+      referredBy: referredBy || '',
+      createdAt: now,
+      updatedAt: now,
+      joinDate: now,
+      lastActive: '',
+      transactions: [],
+      withdrawalRequests: []
+    };
+
+    const firestoreData = {
+      fields: convertToFirestoreFields(userData)
+    };
+
+    await firestoreRequest(`/users/${userId}`, 'PATCH', firestoreData);
+
+    // Generate JWT token
+    const token = generateToken(userId, email, role);
+
+    // Don't return password hash
+    const { passwordHash: _, ...userWithoutPassword } = userData;
+
+    return NextResponse.json({
+      success: true,
+      message: 'User created successfully',
+      user: userWithoutPassword,
+      token
+    }, { status: 201 });
+
+  } catch (error) {
+    console.error('Error creating user:', error);
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH - Login user or update user status (for admin dashboard)
+export async function PATCH(request: NextRequest) {
+  try {
+    const searchParams = request.nextUrl.searchParams;
+    const id = searchParams.get('id');
+    const body = await request.json();
+    
+    // ADMIN: Update user status (from admin dashboard)
+    if (id) {
+      // Get existing user data first
+      let existingUser;
+      try {
+        const response = await firestoreRequest(`/users/${id}`);
+        if (response && response.fields) {
+          existingUser = convertFirestoreUser(response);
+        }
+      } catch (error) {
+        return NextResponse.json(
+          { success: false, error: 'User not found' },
+          { status: 404 }
+        );
+      }
+
+      // Merge existing data with updates
+      const updateData: any = {
+        ...existingUser, // Preserve all existing fields
+        ...body, // Apply updates
+        updatedAt: new Date().toISOString()
+      };
+
+      // Remove Firestore internal fields
+      delete updateData.id;
+      delete updateData.name;
+      delete updateData.fields;
+      delete updateData.passwordHash;
+
+      // Ensure numeric fields are numbers
+      if (updateData.balance !== undefined) updateData.balance = Number(updateData.balance);
+      if (updateData.totalEarnings !== undefined) updateData.totalEarnings = Number(updateData.totalEarnings);
+
+      console.log('Updating user with merged data:', updateData);
+
+      const firestoreData = {
+        fields: convertToFirestoreFields(updateData)
+      };
+
+      await firestoreRequest(`/users/${id}`, 'PATCH', firestoreData);
+
+      return NextResponse.json({
+        success: true,
+        message: 'User updated successfully'
+      });
+    }
+    
+    // ORIGINAL: Login user (email/password)
+    const { email, password } = body;
+
+    if (!email || !password) {
+      return NextResponse.json(
+        { success: false, error: 'Email and password are required' },
+        { status: 400 }
+      );
+    }
+
+    // Find user by email
+    let user: any = null;
+    try {
+      const response = await firestoreRequest('/users');
+      if (response && response.documents) {
+        const users = response.documents.map(convertFirestoreUser);
+        user = users.find((u: any) => u.email === email);
+      }
+    } catch (error) {
+      console.error('Error searching user by email:', error);
+    }
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid email or password' },
+        { status: 401 }
+      );
+    }
+
+    // Verify password
+    const isValidPassword = await verifyPassword(password, user.passwordHash);
+    if (!isValidPassword) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid email or password' },
+        { status: 401 }
+      );
+    }
+
+    // Generate JWT token
+    const token = generateToken(user.id, user.email, user.role);
+
+    // Update last active - preserve all existing fields
+    const updateData = {
+      ...user,
+      lastActive: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Remove Firestore internal fields
+    delete updateData.id;
+    delete updateData.name;
+    delete updateData.fields;
+    delete updateData.passwordHash;
+    
+    const firestoreUpdate = {
+      fields: convertToFirestoreFields(updateData)
+    };
+    
+    await firestoreRequest(`/users/${user.id}`, 'PATCH', firestoreUpdate);
+
+    // Don't return password hash
+    const { passwordHash, ...userWithoutPassword } = user;
+
+    return NextResponse.json({
+      success: true,
+      message: 'Login successful',
+      user: userWithoutPassword,
+      token
+    });
+
+  } catch (error) {
+    console.error('Error in PATCH request:', error);
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// PUT - Update user profile
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { id, name, phone, balance, totalEarnings } = body;
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'User ID is required' },
+        { status: 400 }
+      );
+    }
+
+    // Get existing user data first
+    let existingUser;
+    try {
+      const response = await firestoreRequest(`/users/${id}`);
+      if (response && response.fields) {
+        existingUser = convertFirestoreUser(response);
+      }
+    } catch (error) {
+      return NextResponse.json(
+        { success: false, error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    // Merge existing data with updates
+    const updateData: any = {
+      ...existingUser, // Preserve all existing fields
+      updatedAt: new Date().toISOString()
+    };
+
+    if (name) updateData.name = name;
+    if (phone !== undefined) updateData.phone = phone;
+    if (balance !== undefined) updateData.balance = Number(balance);
+    if (totalEarnings !== undefined) updateData.totalEarnings = Number(totalEarnings);
+
+    // Remove Firestore internal fields
+    delete updateData.id;
+    delete updateData.name;
+    delete updateData.fields;
+    delete updateData.passwordHash;
+
+    const firestoreData = {
+      fields: convertToFirestoreFields(updateData)
+    };
+
+    await firestoreRequest(`/users/${id}`, 'PATCH', firestoreData);
+
+    return NextResponse.json({
+      success: true,
+      message: 'User updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Error updating user:', error);
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
